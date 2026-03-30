@@ -102,26 +102,26 @@ DEFAULT_STATIC_PORTS = {
 # polycli wallet inspect --mnemonic 'lab code glass agree maid neutral vessel horror deny frequent favorite soft gate galaxy proof vintage once figure diary virtual scissors marble shrug drop' --addresses 7 | tee keys.txt | jq -r '.Addresses[] | [.ETHAddress, .HexPrivateKey] | @tsv' | awk 'BEGIN{split("sequencer,aggregator,admin,dac,aggoracle,sovereignadmin,claimsponsor",roles,",")} {print "# " roles[NR] "\n\"l2_" roles[NR] "_address\": \"" $1 "\","; print "\"l2_" roles[NR] "_private_key\": \"0x" $2 "\",\n"}'
 DEFAULT_ACCOUNTS = {
     # sequencer
-    "l2_sequencer_address": "0x1C21C6b3Ba77e8da3A8Fd5eE40f93DBD6Ff9aA05",
-    "l2_sequencer_private_key": "0x328e9a37eb4e8b87f609e2756bd41260224f43aec0ca1391ef76f78d1f7e4464",
+    "l2_sequencer_address": "0x5b06837A43bdC3dD9F114558DAf4B26ed49842Ed",
+    "l2_sequencer_private_key": "0x183c492d0ba156041a7f31a1b188958a7a22eebadca741a7fe64436092dc3181",
     # aggregator
-    "l2_aggregator_address": "0xCDEa8F0BE87617daCEb3a9ea7FBad5626cD3D804",
-    "l2_aggregator_private_key": "0xd94e38b1e1e0d37f2bd80984e4ed13620988146d93fdc8b08352ffd95b24e831",
+    "l2_aggregator_address": "0xCae5b68Ff783594bDe1b93cdE627c741722c4D4d",
+    "l2_aggregator_private_key": "0x2857ca0e7748448f3a50469f7ffe55cde7299d5696aedd72cfe18a06fb856970",
     # admin
-    "l2_admin_address": "0x373458b36aE76cD76acC0e43C403553fACbC52fC",
-    "l2_admin_private_key": "0x516bfd77cd5d7fabbb822c4254ece527371d47844103596416e6c636d7c996e9",
+    "l2_admin_address": "0xE34aaF64b29273B7D567FCFc40544c014EEe9970",
+    "l2_admin_private_key": "0x12d7de8621a77640c9241b2595ba78ce443d05e94090365ab3bb5e19df82c625",
     # dac
-    "l2_dac_address": "0x81020250d83001627c720DB761c83522831CfF39",
-    "l2_dac_private_key": "0x7bfbdaa6359e0d067e18cf2d18adc4d2c46d74c1daad3b75e788ca9896951fc5",
+    "l2_dac_address": "0x5951F5b2604c9B42E478d5e2B2437F44073eF9A6",
+    "l2_dac_private_key": "0x85d836ee6ea6f48bae27b31535e6fc2eefe056f2276b9353aafb294277d8159b",
     # aggoracle
-    "l2_aggoracle_address": "0xd954d12FDb20F03F84173E1477F593957a536bcb",
-    "l2_aggoracle_private_key": "0x2f631a911e221658c1fc783bb57d5dfe986933132768e81fa43da62045898a69",
+    "l2_aggoracle_address": "0x0b68058E5b2592b1f472AdFe106305295A332A7C",
+    "l2_aggoracle_private_key": "0x6d1d3ef5765cf34176d42276edd7a479ed5dc8dbf35182dfdb12e8aafe0a4919",
     # sovereignadmin
-    "l2_sovereignadmin_address": "0xABC031dD9A154997e00EF7ba1d761Ed3D3193Ddc",
-    "l2_sovereignadmin_private_key": "0x3c251e5b2059bb70f96757e6e8ef580d668c28ddab625b3f4b7870e32b11b736",
+    "l2_sovereignadmin_address": "0xc653eCD4AC5153a3700Fb13442Bcf00A691cca16",
+    "l2_sovereignadmin_private_key": "0xa574853f4757bfdcbb59b03635324463750b27e16df897f3d00dc6bef2997ae0",
     # claimsponsor
-    "l2_claimsponsor_address": "0x087bA2A25FC8Bf69b140D30b56438c86472f7e58",
-    "l2_claimsponsor_private_key": "0x6e76e47b77b06a9cea8e7c467b00ef833616fa148d6344dc22aac1f5f7f6939e",
+    "l2_claimsponsor_address": "0x635243A11B41072264Df6c9186e3f473402F94e9",
+    "l2_claimsponsor_private_key": "0x986b325f6f855236b0b04582a19fe0301eeecb343d0f660c61805299dbf250eb",
 }
 
 LEGACY_DEFAULT_ACCOUNTS = {"zkevm_{}".format(k): v for k, v in DEFAULT_ACCOUNTS.items()}
@@ -144,9 +144,9 @@ DEFAULT_L1_ARGS = {
     # a) be used to create keystores for all the types of validators that we have, and
     # b) be used to generate a CL genesis.ssz that has the children validator keys already
     # preregistered as validators
-    "l1_preallocated_mnemonic": "vague crouch obey venture net quantum tattoo install embark moral bring motion",
+    "l1_preallocated_mnemonic": "giant issue aisle success illegal bike spike question tent bar rely arctic volcano long crawl hungry vocal artwork sniff fantasy very lucky have athlete",
     # cast wallet private-key --mnemonic $l1_preallocated_mnemonic
-    "l1_preallocated_private_key": "0x5a92d2a2d651dcfc6be49680c84b6073dc899266297447c46f90aae8f46b3532",
+    "l1_preallocated_private_key": "0xbcdf20249abf0ed6d944c0288fad489e33f66b3960d9e6229c1cd214ed3bbe31",
     # The L1 HTTP RPC endpoint.
     "l1_rpc_url": "http://el-1-{}-{}:8545".format(
         _DEFAULT_L1_EL_TYPE, _DEFAULT_L1_CL_TYPE
