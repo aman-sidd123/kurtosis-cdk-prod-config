@@ -36,3 +36,7 @@ snapshots
 # Solidity build artifacts
 out/
 cache/
+
+anvil-preprod.private.yml
+
+artifacts/preprod-baseline/anvil-full/config/
