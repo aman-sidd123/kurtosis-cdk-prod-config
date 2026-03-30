@@ -1,0 +1,49 @@
+deployment_stages:
+  deploy_l1: false
+  deploy_agglayer_contracts_on_l1: true
+  deploy_databases: true
+  deploy_cdk_central_environment: true
+  deploy_cdk_bridge_infra: true
+  deploy_agglayer: true
+
+args:
+  sequencer_type: cdk-erigon
+  consensus_contract_type: rollup
+  additional_services: []
+  l1_engine: anvil
+  l1_chain_id: 31337
+  l1_rpc_url: "http://host.docker.internal:8545"
+  l1_ws_url: "ws://host.docker.internal:8545"
+  l1_funding_amount: "5ether"
+  zkevm_prover_image: hermeznetwork/zkevm-prover:v8.0.0-RC16-fork.12
+  agglayer_contracts_image: europe-west2-docker.pkg.dev/prj-polygonlabs-devtools-dev/public/agglayer-contracts:v11.0.0
+
+  # Fix 1: Use "latest" instead of "finalized" for Anvil
+  zkevm_l1_highest_block_type: "latest"
+
+  # Fix 2: Correct syntax (removed rogue quotes), wrapped values in quotes
+  l2_sequencer_address: "0x1C21C6b3Ba77e8da3A8Fd5eE40f93DBD6Ff9aA05"
+  l2_sequencer_private_key: "0x328e9a37eb4e8b87f609e2756bd41260224f43aec0ca1391ef76f78d1f7e4464"
+
+  l2_aggregator_address: "0xCDEa8F0BE87617daCEb3a9ea7FBad5626cD3D804"
+  l2_aggregator_private_key: "0xd94e38b1e1e0d37f2bd80984e4ed13620988146d93fdc8b08352ffd95b24e831"
+
+  l2_admin_address: "0x373458b36aE76cD76acC0e43C403553fACbC52fC"
+  l2_admin_private_key: "0x516bfd77cd5d7fabbb822c4254ece527371d47844103596416e6c636d7c996e9"
+
+  l2_dac_address: "0x81020250d83001627c720DB761c83522831CfF39"
+  l2_dac_private_key: "0x7bfbdaa6359e0d067e18cf2d18adc4d2c46d74c1daad3b75e788ca9896951fc5"
+
+  l2_claimsponsor_address: "0x087bA2A25FC8Bf69b140D30b56438c86472f7e58"
+  l2_claimsponsor_private_key: "0x6e76e47b77b06a9cea8e7c467b00ef833616fa148d6344dc22aac1f5f7f6939e"
+
+  chain_name: "Amolygon"
+  l2_chain_id: 123456789
+  l2_network_id: 1
+
+  # Fix 3: Explicitly set fork ID to match your prover image
+  zkevm_fork_id: 12
+
+  zkevm_use_real_verifier: false
+  log_level: info
+  log_format: json

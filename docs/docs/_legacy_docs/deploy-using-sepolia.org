@@ -1,0 +1,308 @@
+* Deploy to Sepolia
+
+In some scenarios, it's desirable to run the Kurtosis CDK package with
+a real testnet rather than using a local chain. This document will
+show how to modify the configuration of the Kurtosis CDK package in
+order to deploy to [[https://sepolia.etherscan.io/][Sepolia]].
+
+** Disable Local L1
+
+The first thing we should do is make sure that Kurtosis doesn't bother
+doing the L1 deployment. In order to achieve this, you need to set
+~deployment_stages.deploy_l1~ to ~false~. You can use the handy
+configuration file we provide, [[../.github/tests/external-l1/deploy-cdk-to-sepolia.yml]],
+with all the necessary configuration for deploying to Sepolia. Or
+you can also modify the ~input_parser.star~ file directly.
+
+This will stop Kurtosis from using spinning up the L1 [[https://github.com/kurtosis-tech/ethereum-package][Ethereum
+package]]. Since we're using Sepolia, there will be no need.
+
+** Changing Deployment Salt
+
+The deployment of the of the L1 contracts is deterministic. If this
+isn't the first time deploying the CDK contracts to Sepolia with a
+specific address, the [[https://github.com/0xPolygon/kurtosis-cdk/blob/main/templates/contract-deploy/deploy_parameters.json#L12][salt]] must be changed in order to avoid a
+deployment failure. You can modify the ~salt~ field in the
+~deploy_parameters.json~ file manually to get a new salt. You could
+also run a script like the one below to rotate the salt randomly.
+
+#+begin_src bash
+sed -i 's/"salt": "0x.*",/"salt": "0x'$(xxd -p < /dev/random  | tr -d "\n" | head -c 64)'",/' templates/contract-deploy/deploy_parameters.json
+#+end_src
+
+** Application Key Rotation
+
+By default, the CDK package has some hard coded keys. This is fine for
+local testing, but if you run on Sepolia, you're likely to get your
+funds stolen even if it's inadvertent!
+
+First, let's create a new mnemonic seed phrase to derive our application keys.
+
+#+begin_src bash :exports both verbatim :results output example
+cast wallet new-mnemonic
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Successfully generated a new mnemonic.
+Phrase:
+film crazy inform bind stomach weather cruel hold quarter stage country purpose
+
+Accounts:
+- Account 0:
+Address:     0x5996602860Da5b232429A007Ffc29Fe334993143
+Private key: 0x2a109c981f2fd6614f6cfbd40461cc9605904e5d4139f106a0f8759aa194b94e
+#+end_example
+
+Great! Now we have a new seed phrase to use. Now, we'll take that seed
+phrase and derive application keys.
+
+#+begin_src bash :exports both verbatim :results output example
+seed="film crazy inform bind stomach weather cruel hold quarter stage country purpose"
+polycli wallet inspect --mnemonic "$seed" --addresses 9 | \
+    jq -r '.Addresses[] | [.ETHAddress, .HexPrivateKey] | @tsv' | \
+    awk 'BEGIN{split("sequencer,aggregator,claimsponsor,timelock,admin,loadtest,agglayer,dac,proofsigner",roles,",")} {print "l2_" roles[NR] "_address: \"" $1 "\""; print "l2_" roles[NR] "_private_key: \"0x" $2 "\"\n"}'
+#+end_src
+
+#+RESULTS:
+#+begin_example
+l2_sequencer_address: "0x5996602860Da5b232429A007Ffc29Fe334993143"
+l2_sequencer_private_key: "0x2a109c981f2fd6614f6cfbd40461cc9605904e5d4139f106a0f8759aa194b94e"
+
+l2_aggregator_address: "0x25697f040f8EE9145452b115F36aEd35a12d32AD"
+l2_aggregator_private_key: "0xedab8a45bea025ec96808a63368ad2c8099b85944965c26256f987ff9ad712f4"
+
+l2_claimsponsor_address: "0xc8273E02E94598F39e8Ec8867902D4807917A165"
+l2_claimsponsor_private_key: "0x216a4646ea3dd753f799b7eb7d7f8fe57b96c01c1fcd5eec496d888f5a7677cd"
+
+l2_admin_address: "0x87Ae0E9416ca1497c4AdDE7E1057D4E29f1714Cf"
+l2_admin_private_key: "0x69659a88bd0950e4914f69aaa867e258ff39bc6274d1576a23c477c65987e31f"
+
+l2_dac_address: "0x9150404Cc4d66673b1598dA00a9AC6ce1df53582"
+l2_dac_private_key: "0xc1345e1b9680c8623df4f74d4b4f7bc8d9a5bebfebde34786e2146d30b1c68c0"
+#+end_example
+
+We're going to take these generated values and place them into the
+[[../.github/tests/external-l1/deploy-cdk-to-sepolia.yml]] file. Each one of these settings should already exist
+and you're simply replacing the keys that are already in this file.
+
+** L1 Configuration
+
+Now we need to adjust the parameters for L1 specifically for
+Sepolia. First, let's create a new mnemonic specifically for running
+contract deployment.
+
+#+begin_src bash :exports both verbatim :results output example
+cast wallet new-mnemonic
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Phrase:
+wash shoe curve captain invest aunt farm quality bomb aunt sunny arm
+
+Accounts:
+- Account 0:
+Address:     0xd1c71c8ca3e031aEABB685ACDDA98e4Ca3A96fCC
+Private key: 0xfbbcf7c3d0240ce02a9e3bde93f2c060db716acdf81d1d5bd4dd0a8b7f96ac63
+#+end_example
+
+
+We'll take that mnemonic and configure ~l1_preallocated_mnemonic~ with
+this value.
+
+#+begin_src bash
+mnemonic="wash shoe curve captain invest aunt farm quality bomb aunt sunny arm"
+yq -Y --in-place --arg m "$mnemonic" '.args.l1_preallocated_mnemonic = $m' .github/tests/external-l1/deploy-cdk-to-sepolia.yml
+#+end_src
+
+This account is used for two things. It sends funds to the accounts
+that need funds on L1 (e.g. sequencer, aggregator, admin).  This
+account also does the contract deployment. Accordingly, *we'll need to
+send funds to this account*.
+
+We have already configured the L1 chain identifier to match Sepolia's chain
+identifier in the configuration file: ~l1_chain_id: 11155111~ and the
+amount of funds allocated to this deployment: ~l1_funding_amount: 5ether~.
+
+There are a few other values we need to configure for L1.
+
+#+begin_src bash
+# The L1 HTTP RPC and WS urls need to change to be valid Sepolia endpoints.
+yq -Y --in-place '.args.l1_rpc_url = "https://YOUR-SEPOLIA-RPC"' .github/tests/external-l1/deploy-cdk-to-sepolia.yml
+yq -Y --in-place '.args.l1_ws_url = "wss://YOUR-SEPOLIA-RPC"' .github/tests/external-l1/deploy-cdk-to-sepolia.yml
+
+# We need to alter the finality time for erigon otherwise we'll need to wait for the contract deployment to finalize.
+sed -i 's/zkevm.l1-highest-block-type: finalized/zkevm.l1-highest-block-type: latest/' templates/cdk-erigon/config.yml
+#+end_src
+
+** Running the Network
+
+All of the configuration should be set. Let's run things:
+
+#+begin_src bash
+kurtosis run --enclave cdk .
+#+end_src
+
+This process will take longer than the typical startup time mostly
+because the block interval on Sepolia is longer than the default block
+interval for our fake L1. As of Oct 16, 2024, this process takes
+around 9 minutes to finish.
+
+
+To make sure that the network is functional, you can run the script
+below to send a test transaction and to ensure that your network is
+progressing as expected.
+
+#+begin_src bash
+rpc_url=$(kurtosis port print cdk cdk-erigon-rpc-001 rpc)
+l2_admin_private_key="$(yq '.args.l2_admin_private_key' .github/tests/external-l1/deploy-cdk-to-sepolia.yml)" # You might have to change this value!
+
+cast rpc --rpc-url $rpc_url zkevm_batchNumber
+cast rpc --rpc-url $rpc_url zkevm_virtualBatchNumber
+cast rpc --rpc-url $rpc_url zkevm_verifiedBatchNumber
+
+cast send --legacy --rpc-url $rpc_url --private-key $l2_admin_private_key --value 1 0x0000000000000000000000000000000000000000
+#+end_src
+
+At this point, you'll probably want to see your deployed
+contracts an on-chain activity.
+
+#+begin_src bash :exports both verbatim :results output code
+kurtosis service exec cdk contracts-001 'cat /opt/output/combined.json'
+#+end_src
+
+#+RESULTS:
+#+begin_src json
+{
+  "polygonRollupManagerAddress": "0x698e0dDF844E13E736F21B48DAee689914ec22aC",
+  "polygonZkEVMBridgeAddress": "0x5478fF04B5281BbbD5eF05355eE5f9f17b889107",
+  "polygonZkEVMGlobalExitRootAddress": "0xBb64fb56767CD387468Ef77a49b3279a2E8b5A6b",
+  "polTokenAddress": "0xFbd8035eE3142298Ac9c1a9d5963673AB68f66c2",
+  "zkEVMDeployerContract": "0xb8764a7108A549769A8E19DAa701b458e67121b5",
+  "deployerAddress": "0x87Ae0E9416ca1497c4AdDE7E1057D4E29f1714Cf",
+  "timelockContractAddress": "0x9530996Ac0ba5E40144b61220dc18132042353B6",
+  "deploymentRollupManagerBlockNumber": 6889321,
+  "upgradeToULxLyBlockNumber": 6889321,
+  "admin": "0x87Ae0E9416ca1497c4AdDE7E1057D4E29f1714Cf",
+  "trustedAggregator": "0x25697f040f8EE9145452b115F36aEd35a12d32AD",
+  "proxyAdminAddress": "0x9b4C4cB4102a765cc9e11B2C731f4E1093bB30FD",
+  "salt": "0xea9f524f1063505560c463bc43d3d15cadd983e597df916cc85761f2e21af318",
+  "polygonDataCommitteeAddress": "0x2e7C948035e285C152De898Be3ed4453c589c58d",
+  "firstBatchData": {
+    "transactions": "0xf9010380808401c9c380945478ff04b5281bbbd5ef05355ee5f9f17b88910780b8e4f811bff7000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a40d5f56745a118d0906a34e69aec8c0db1cb8fa000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005ca1ab1e0000000000000000000000000000000000000000000000000000000005ca1ab1e1bff",
+    "globalExitRoot": "0xad3228b676f7d3cd4284a5443f17f1962b36e491b30a40b2405849e597ba5fb5",
+    "timestamp": 1729125384,
+    "sequencer": "0x5996602860Da5b232429A007Ffc29Fe334993143"
+  },
+  "genesis": "0x1946542f5963d26e510c888d0ddea53f9ffc0b886197a7d90b4ec43a32a6a4ee",
+  "createRollupBlockNumber": 6889325,
+  "rollupAddress": "0x31635db1133Bdc8204918ce47161eE84dE58ccB2",
+  "verifierAddress": "0x08a05412De2049C72588fb031D3E90088D317E7e",
+  "consensusContract": "PolygonValidiumEtrog",
+  "polygonZkEVML2BridgeAddress": "0x5478fF04B5281BbbD5eF05355eE5f9f17b889107",
+  "polygonZkEVMGlobalExitRootL2Address": "0xa40d5f56745a118d0906a34e69aec8c0db1cb8fa",
+  "bridgeGenBlockNumber": 6889325
+}
+#+end_src
+
+These are all of the generated details from the network. We can see
+some of the contracts in Etherscan / Blockscout now:
+
+- Sequenced batches should show up here https://sepolia.etherscan.io/address/0x31635db1133Bdc8204918ce47161eE84dE58ccB2
+- Verified batches should show up here https://sepolia.etherscan.io/address/0x698e0dDF844E13E736F21B48DAee689914ec22aC
+
+** Recollecting your ETH
+
+If you end up needing to run this process multiple times, you'll
+likely want to do two things to reset. First, you'll want to rotate
+the salt. To do that, you can re-run the command from earlier in the
+document. Second, you'll probably want to recollect your Sepolia ETH
+back to the deployer account so it can be redistributed.
+
+#+begin_src bash
+#!/bin/bash
+
+keys=("0x2a109c981f2fd6614f6cfbd40461cc9605904e5d4139f106a0f8759aa194b94e"
+"0xedab8a45bea025ec96808a63368ad2c8099b85944965c26256f987ff9ad712f4"
+"0x216a4646ea3dd753f799b7eb7d7f8fe57b96c01c1fcd5eec496d888f5a7677cd"
+"0xa0e35402da2dcebb8a33b89806d043bb5785a6a04aa5d9cf47f0950d88668c65"
+"0x69659a88bd0950e4914f69aaa867e258ff39bc6274d1576a23c477c65987e31f"
+"0x23db51713f401984ea6331ccce3a9b3b98996838ccec43d4de828c3b501e07de"
+"0xf44263cc5699fe3889f892834885111164eb1bea1c9f16322c5577165c578ae4"
+"0xc1345e1b9680c8623df4f74d4b4f7bc8d9a5bebfebde34786e2146d30b1c68c0"
+"0x7e60d7b0924128bd629b5942ad7d5610c71794e9a00eb0e2c7b0bb5ba633bf94")
+
+# sepolia
+rpc_url="https://rpc.sepolia.org"
+
+return_address="0xd1c71c8ca3e031aEABB685ACDDA98e4Ca3A96fCC"
+
+for prv_key in "${keys[@]}"; do
+    addr=$(cast wallet address --private-key $prv_key)
+    tot_wei=$(cast balance --rpc-url $rpc_url $addr)
+    is_enough=$(bc <<< "$tot_wei > 1000000000000000")
+    if [[ $is_enough -eq 0 ]]; then
+        echo "$addr is empty - $tot_wei wei"
+    else
+        echo "$addr has value - $tot_wei wei"
+        gas_price=$(cast gas-price --rpc-url $rpc_url)
+        gas_price=$(bc <<< "$gas_price * 2")
+        cast send --legacy --value $(bc <<< "$tot_wei - $gas_price * 21000") --gas-price $gas_price --rpc-url $rpc_url --private-key $prv_key $return_address
+    fi
+done
+#+end_src
+
+* Troubleshooting
+
+One piece of general advice: if your ~kurtosis run~ fails for some
+reason in the middle of the run, you'll usually want to do a full
+cleanup of the enclave before trying to run again.
+
+#+begin_src bash
+kurtosis clean --all
+#+end_src
+
+** 429 Too Many Requests
+
+After following the above instructions, you might see an error like this:
+
+#+begin_example
+error getting last block num from eth client: 429 Too Many Requests
+#+end_example
+
+First, check the state of the cdk-node service
+
+#+begin_example
+kurtosis enclave inspect <enclave_name>
+#+end_example
+
+If the cdk-node service has stopped, simply restart the service.
+
+#+begin_example
+kurtosis service stop <enclave_name> <cdk-node-001>
+kurtosis service start <enclave_name> <cdk-node-001>
+#+end_example
+
+** Replay-Protected Transactions
+
+After ~kurtosis run~ you might see an error like this:
+
+#+begin_example
+ProviderError: only replay-protected (EIP-155) transactions allowed over RPC
+#+end_example
+
+The deployment of the [[https://github.com/0xPolygonHermez/zkevm-contracts][zkevm-contracts]] uses a specific method to
+maintain [[https://yamenmerhi.medium.com/nicks-method-ethereum-keyless-execution-168a6659479c#0c39][consistent addresses]] across chains. If you're seeing this
+error, it means your RPC provider is blocking these transactions. If
+you're running your own node you'll need to make some configuration
+changes. E.g. in [[https://geth.ethereum.org/docs/fundamentals/command-line-options][geth]] you would set ~rpc.allow-unprotected-txs~:
+
+#+begin_example
+    --rpc.allow-unprotected-txs         (default: false)                   ($GETH_RPC_ALLOW_UNPROTECTED_TXS)
+          Allow for unprotected (non EIP155 signed) transactions to be submitted via RPC
+#+end_example
+
+If you're not running your own node, you'll need to use an RPC
+provider that allows unprotected transactions. In the example for this
+guide, I've used [[https://www.alchemy.com/][Alchemy]].

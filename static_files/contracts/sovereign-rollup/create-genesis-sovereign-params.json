@@ -1,0 +1,36 @@
+{
+    "rollupManagerAddress": "{{ .rollup_manager_address }}",
+    "rollupID": {{ .l2_network_id }},
+    "chainID": {{.l2_chain_id}},
+    "gasTokenAddress": "{{ .gas_token_address }}",
+    "bridgeManager": "{{ .l2_sovereignadmin_address }}",
+    "sovereignWETHAddress": "{{ .gas_token_address }}",
+    "sovereignWETHAddressIsNotMintable": false,
+    "globalExitRootRemover": "{{ .l2_sovereignadmin_address }}",
+    "emergencyBridgePauser": "{{ .l2_sovereignadmin_address }}",
+    "emergencyBridgeUnpauser": "{{ .l2_sovereignadmin_address }}",
+    "proxiedTokensManager" : "{{ .l2_sovereignadmin_address }}",
+    "setPreMintAccounts": true,
+    "preMintAccounts": [],
+    "setTimelockParameters": true,
+    "timelockParameters": {
+        "adminAddress": "{{ .l2_admin_address }}",
+        "minDelay": 3600
+    },
+
+    "aggOracleOwner": "{{ .l2_sovereignadmin_address }}",
+
+    {{if .use_agg_oracle_committee}}
+    "useAggOracleCommittee": true,
+    "aggOracleCommittee": ["{{ .l2_aggoracle_address }}"],
+    "quorum": "{{ .agg_oracle_committee_quorum }}",
+    "globalExitRootUpdater": "",
+    {{else}}
+    "useAggOracleCommittee": false,
+    "aggOracleCommittee": [],
+    "quorum": 0,
+    "globalExitRootUpdater": "{{ .l2_aggoracle_address }}",
+    {{end}}
+
+    "formatGenesis": "geth"
+}

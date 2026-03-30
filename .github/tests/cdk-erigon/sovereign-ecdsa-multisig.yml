@@ -1,0 +1,26 @@
+deployment_stages:
+  deploy_l2_contracts: true
+  deploy_cdk_bridge_infra: true
+
+args:
+  consensus_contract_type: ecdsa-multisig # new sovereign consensus
+
+  # aggsender-validator related params
+  use_agg_sender_validator: false
+  agg_sender_multisig_threshold: 1
+  agg_sender_validator_total_number: 0
+
+  # aggkit related params
+  aggkit_components: aggsender
+
+  # agglayer related params
+  agglayer_prover_primary_prover: mock-prover
+  zkevm_use_real_verifier: false
+  sp1_prover_key: ""
+
+  # cdk-erigon related params
+  sequencer_type: cdk-erigon
+  cdk_erigon_image: ghcr.io/0xpolygon/cdk-erigon:v2.65.0-RC3
+  enable_normalcy: true
+  erigon_strict_mode: false
+  gas_token_enabled: false

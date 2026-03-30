@@ -1,0 +1,17 @@
+{
+    "type": "EOA",
+    "consensusContract": "{{ .consensus_contract }}",
+    "consensusContractAddress": "",
+    "polygonRollupManagerAddress": "{{ .rollup_manager_address }}",
+    "verifierAddress": "0x0000000000000000000000000000000000000000",
+    "description": "{{ .consensus_contract }} Type",
+    "forkID": 0,
+    "timelockDelay": 0,
+    "timelockSalt": "",
+    "deployerPvtKey": "{{ .l2_admin_private_key }}",
+    "maxFeePerGas":"",
+    "maxPriorityFeePerGas":"",
+    "multiplierGas": "",
+    "genesisRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "programVKey": "{{.program_vkey}}"
+}

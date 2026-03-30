@@ -1,0 +1,16 @@
+args:
+  additional_services:
+    - agglogger
+    - arpeggio
+    # - assertoor
+    # - blockscout # The service experiences Out of Memory (OOM) termination when deployed inside github runners.
+    # - blutgang
+    - bridge_ui
+    - bridge_spammer
+    - erpc
+    - observability
+    - rpc_fuzzer
+    - status_checker
+    - test_runner
+    - tx_spammer
+    - zkevm_bridge_ui

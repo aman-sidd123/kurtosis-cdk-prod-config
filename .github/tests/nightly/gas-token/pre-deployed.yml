@@ -1,0 +1,12 @@
+deployment_stages:
+  deploy_l1: false
+
+args:
+  gas_token_enabled: true
+  gas_token_address: "0xCHANGEME"
+
+  # fork12-cdk-erigon-validium
+  agglayer_contracts_image: europe-west2-docker.pkg.dev/prj-polygonlabs-devtools-dev/public/agglayer-contracts:v11.0.0
+  zkevm_prover_image: hermeznetwork/zkevm-prover:v8.0.0-RC16-fork.12
+  consensus_contract_type: cdk-validium
+  sequencer_type: cdk-erigon

@@ -1,0 +1,595 @@
+Kurtosis CDK Developer Flow
+===========================
+
+This note explains how the kurtosis-cdk repo works at a high level for the
+`cdk-erigon + rollup` path, using the successful local bring-up as the main
+reference. The goal is to give a developer enough context to understand:
+
+1. what Kurtosis is orchestrating
+2. what gets deployed on L1
+3. what gets deployed on L2
+4. how runtime components depend on each other
+5. which roles/keys are used
+6. which files/artifacts matter
+
+
+1. Mental model
+---------------
+
+Kurtosis is not the L2 itself. Kurtosis is the workflow/orchestration layer.
+This repo uses Kurtosis to:
+
+- merge args and defaults
+- decide which deployment stages run
+- render config files and scripts
+- launch helper containers and long-running services
+- run contract deployment jobs
+- store artifacts from one stage and pass them to later stages
+
+The real system is:
+
+- L1 chain
+- L1 contracts
+- generated artifacts (`combined.json`, genesis, dynamic config, allocs)
+- runtime services (`agglayer`, `cdk-erigon`, `cdk-node`, bridge, postgres)
+
+
+2. Main orchestration flow
+--------------------------
+
+Entry point:
+- `main.star`
+
+Input/defaults:
+- `src/package_io/input_parser.star`
+
+Top-level order from `main.star`:
+
+1. Parse args and deployment stages.
+2. Deploy or attach to L1.
+3. Deploy L1 contracts and create the rollup.
+4. Start databases.
+5. Start Agglayer.
+6. Start the L2 chain components.
+7. Fund/init required L2 accounts or contracts.
+8. Start bridge infrastructure.
+9. Start optional services, if enabled.
+
+For `cdk-erigon + rollup`, the critical path is:
+
+L1 -> contracts -> artifacts -> postgres -> agglayer -> cdk-erigon sequencer ->
+pool manager -> cdk-erigon RPC -> cdk-node -> bridge service
+
+
+3. Important files by responsibility
+------------------------------------
+
+Top-level orchestration:
+- `main.star`
+- `src/package_io/input_parser.star`
+- `src/package_io/constants.star`
+
+Contracts and artifacts:
+- `src/contracts/agglayer.star`
+- `src/contracts/util.star`
+- `static_files/contracts/contracts.sh`
+- `static_files/contracts/deploy_parameters.json`
+- `static_files/contracts/create_rollup_parameters.json`
+
+cdk-erigon runtime:
+- `src/chain/cdk-erigon/launcher.star`
+- `src/chain/cdk-erigon/cdk_erigon.star`
+- `src/chain/cdk-erigon/cdk_node.star`
+- `static_files/chain/cdk-erigon/cdk-erigon/config.yml`
+- `static_files/chain/cdk-erigon/cdk-erigon/chainspec.json`
+
+Agglayer and bridge:
+- `src/agglayer.star`
+- `src/chain/shared/zkevm_bridge_service.star`
+- `static_files/agglayer/config.toml`
+- `static_files/chain/shared/zkevm-bridge-service/config.toml`
+
+Persistence:
+- `src/chain/shared/databases.star`
+
+
+4. Input parsing and defaults
+-----------------------------
+
+`src/package_io/input_parser.star` defines:
+
+- deployment stages
+- default images
+- default ports
+- default role addresses
+- default private keys
+- L1 defaults
+- L2 defaults
+- rollup defaults
+
+Important values for `cdk-erigon + rollup`:
+
+- `sequencer_type = cdk-erigon`
+- `consensus_contract_type = rollup`
+- `l2_chain_id`
+- `l2_network_id`
+- `chain_name`
+- `l1_rpc_url`, `l1_ws_url`, `l1_chain_id`
+- role addresses/private keys:
+  - `l2_sequencer_address`
+  - `l2_aggregator_address`
+  - `l2_admin_address`
+  - `l2_dac_address`
+  - `l2_aggoracle_address`
+  - `l2_sovereignadmin_address`
+  - `l2_claimsponsor_address`
+
+The admin is the most important operator address in this path.
+
+
+5. L1 contract deployment flow
+------------------------------
+
+The contract helper service is created in:
+- `src/contracts/agglayer.star`
+
+The actual deployment logic runs in:
+- `static_files/contracts/contracts.sh`
+
+The contract flow is:
+
+1. `create_keystores`
+2. `deploy_agglayer_core_contracts`
+3. `create_agglayer_rollup`
+4. `update_ger`
+
+What `deploy_agglayer_core_contracts` does:
+
+- waits for L1 RPC
+- funds important L1-side operator accounts
+- rewrites Hardhat config to use the chosen L1 RPC
+- runs contract deployment scripts inside the contracts image
+- emits `deploy_output.json`
+- normalizes output into `combined.json`
+- deploys deterministic deployment proxy
+- sets up roles such as trusted aggregator
+
+What `create_agglayer_rollup` does:
+
+- creates genesis
+- creates the rollup instance on L1
+- emits rollup-specific artifacts
+- generates `first-batch-config.json`
+
+
+6. L1 contracts that matter
+---------------------------
+
+From `combined.json` in the successful run, the important L1 contracts are:
+
+- `AgglayerManager`
+  - same as `polygonRollupManagerAddress`
+  - central rollup manager on L1
+
+- `AgglayerBridge`
+  - same as `polygonZkEVMBridgeAddress`
+  - L1 bridge contract
+
+- `AgglayerGER`
+  - same as `polygonZkEVMGlobalExitRootAddress`
+  - global exit root manager on L1
+
+- `AgglayerGateway`
+  - same as `aggLayerGatewayAddress`
+  - Agglayer gateway contract on L1
+
+- `polTokenAddress`
+  - POL token on L1
+
+- `zkEVMDeployerContract`
+  - deploy helper contract for zkEVM/CDK contracts
+
+- `timelockContractAddress`
+  - timelock/admin control contract
+
+- `proxyAdminAddress`
+  - proxy admin for upgradeable contracts
+
+- `rollupAddress`
+  - the created rollup contract on L1
+
+- `verifierAddress`
+  - verifier contract used by the rollup path
+
+- `consensusContractAddress`
+  - for rollup mode this is the Etrog rollup consensus contract
+
+In the successful run:
+
+- `AgglayerManager`: `0xd806a0aE5D3561c96019eEb7eE1F17d6de2809aD`
+- `AgglayerBridge`: `0x78dE42B9Cf2c8bd526941a969de7391857E876dC`
+- `AgglayerGER`: `0x434BfF2C16B575F4EceD9614E08Cf4E141B1c83B`
+- `AgglayerGateway`: `0xc168811516fF58B67FE21Fd6090ABA497b636e1E`
+- `rollupAddress`: `0x932Cb8C4641f15B9aE39bDd569e3Ad33f8f532fb`
+- `consensusContract`: `PolygonZkEVMEtrog`
+- `consensusContractAddress`: `0xB05A929237784f43dE4b6153cd4BE0eb2F756297`
+
+
+7. L2 contracts and addresses that matter
+-----------------------------------------
+
+For the `cdk-erigon + rollup` path, the main L2-side contracts visible from the
+generated outputs are:
+
+- `polygonZkEVML2BridgeAddress`
+  - L2 bridge address
+
+- `LegacyAgglayerGERL2`
+  - L2-side GER-related address
+
+In the successful run:
+
+- `polygonZkEVML2BridgeAddress`: `0x78dE42B9Cf2c8bd526941a969de7391857E876dC`
+- `LegacyAgglayerGERL2`: `0xa40d5f56745a118d0906a34e69aec8c0db1cb8fa`
+
+Other important L2-side deployment actions in `contracts.sh`:
+
+- funds prefunded L2 accounts
+- may deploy deterministic deployment proxy on L2
+- may deploy bridge-and-call tooling if enabled
+
+Important note:
+- some addresses are reused or mirrored across L1/L2 output naming for
+  compatibility reasons
+- always trust the generated artifacts more than assumptions about naming
+
+
+8. Artifact outputs every developer should know
+-----------------------------------------------
+
+The contract flow produces the main source-of-truth files:
+
+- `combined.json`
+- `combined-001.json`
+- `deploy_output.json`
+- `create_rollup_output.json`
+- `dynamic-<chain_name>-conf.json`
+- `dynamic-<chain_name>-allocs.json`
+- `first-batch-config.json`
+- `genesis.json`
+- `genesis.original.json`
+
+What they are used for:
+
+- `combined.json`
+  - canonical contract address bundle
+  - later services extract L1/L2 contract addresses from this
+
+- `dynamic-<chain_name>-conf.json`
+  - dynamic chain configuration for cdk-erigon
+
+- `dynamic-<chain_name>-allocs.json`
+  - account allocations/genesis state for cdk-erigon
+
+- `first-batch-config.json`
+  - initial batch data for bootstrapping the chain
+
+- `genesis.json`
+  - chain genesis artifact
+
+Without these files, the runtime cannot be reconstructed safely.
+
+
+9. Runtime database layer
+-------------------------
+
+Postgres is defined in:
+- `src/chain/shared/databases.star`
+
+For `cdk-erigon`, the important databases include:
+
+- `aggregator_db`
+- `aggregator_syncer_db`
+- `bridge_db`
+- `dac_db`
+- `prover_db`
+- `pool_manager_db`
+
+Role of the DB layer:
+
+- persists bridge state
+- persists prover state
+- persists aggregator/pool-manager related state
+
+This is non-chain state that the runtime services need in order to operate.
+
+
+10. Agglayer flow
+-----------------
+
+Service definition:
+- `src/agglayer.star`
+
+Agglayer does:
+
+1. reads rendered config
+2. mounts aggregator keystore
+3. connects to L1 RPC, DB, and contract addresses
+4. exposes:
+   - gRPC
+   - ReadRPC
+   - admin port
+   - metrics
+
+Agglayer is a coordination/proof-oriented service, not the sequencer itself.
+
+Important inputs:
+
+- `l1_rpc_url`
+- `l1_chain_id`
+- `l2_sequencer_address`
+- `rollup manager / bridge / GER addresses`
+- DB configs
+
+
+11. cdk-erigon sequencer flow
+-----------------------------
+
+Sequencer service definition:
+- `src/chain/cdk-erigon/cdk_erigon.star`
+
+Runtime config:
+- `static_files/chain/cdk-erigon/cdk-erigon/config.yml`
+
+The sequencer:
+
+1. loads dynamic chain config and allocs
+2. loads rollup contract addresses
+3. syncs required L1 context
+4. waits until the chosen L1 block type is acceptable
+5. starts sequencing
+6. emits datastream output
+
+Important config behavior:
+
+- `zkevm.l1-highest-block-type`
+  - this was the key to the successful bring-up
+  - default `finalized` behavior stalled the external Anvil path
+  - changing it to `highest` allowed the local bring-up to proceed
+
+- `zkevm.address-admin`
+- `zkevm.address-sequencer`
+- `zkevm.address-rollup`
+- `zkevm.address-zkevm`
+- `zkevm.address-ger-manager`
+
+If the sequencer does not start producing blocks, the whole L2 appears "up"
+but remains unusable.
+
+
+12. zkevm-pool-manager flow
+---------------------------
+
+Service definition:
+- `src/chain/cdk-erigon/zkevm_pool_manager.star`
+
+This service sits in the transaction submission path for the non-sequencer RPC.
+
+High level role:
+
+- accept/coordinate tx flow
+- support the public RPC path
+- connect to sequencer side
+
+If pool-manager path is not functioning, the RPC node may answer read methods
+but reject or fail tx submission.
+
+
+13. cdk-erigon RPC flow
+-----------------------
+
+The non-sequencer RPC node:
+
+1. starts from the same chain artifacts
+2. follows sequencer/datastream output
+3. serves JSON-RPC and WS to clients
+
+Important observation from debugging:
+
+- RPC can be up and still not be "transaction ready"
+- it can answer `chain-id` and `block-number`
+- but still return `not stored` until sequencer/datastream state progresses
+
+So "service is running" is not the same as "chain is operational".
+
+
+14. cdk-node flow
+-----------------
+
+Service definition:
+- `src/chain/cdk-erigon/cdk_node.star`
+
+For `rollup`, `cdk-node` runs these components:
+
+- `sequence-sender`
+- `aggregator`
+
+It mounts:
+
+- `config.toml`
+- `genesis.json`
+- `aggregator.keystore`
+- `sequencer.keystore`
+- `claimsponsor.keystore`
+
+It connects to:
+
+- L1 RPC
+- L2 RPC
+- Agglayer
+- Postgres
+
+This is one of the core CDK runtime services and should be treated as an
+essential part of the rollup stack.
+
+
+15. prover / stateless executor flow
+------------------------------------
+
+Supporting services include:
+
+- `zkevm-prover-001`
+- `zkevm-stateless-executor-001`
+
+They provide gRPC execution/proving related support that cdk-erigon and the
+stack reference via config.
+
+These are support services, not user-facing services.
+
+
+16. bridge service flow
+-----------------------
+
+Service definition:
+- `src/chain/shared/zkevm_bridge_service.star`
+
+Config:
+- `static_files/chain/shared/zkevm-bridge-service/config.toml`
+
+The bridge service:
+
+1. loads bridge config with L1/L2 contract addresses
+2. mounts `claimsponsor.keystore`
+3. connects to `bridge_db`
+4. connects to L1 RPC and L2 RPC
+5. exposes:
+   - RPC
+   - gRPC
+   - metrics
+
+This is the main runtime service for bridge functionality.
+
+
+17. Roles and keys every developer should understand
+----------------------------------------------------
+
+Main L2 roles:
+
+- `l2_admin_address`
+  - primary admin/deployer/operator role
+  - owns many admin privileges in deployment params
+
+- `l2_sequencer_address`
+  - trusted sequencer
+  - used by sequencer-side flow and coinbase settings
+
+- `l2_aggregator_address`
+  - trusted aggregator role
+
+- `l2_sovereignadmin_address`
+  - used in some admin/proxied token roles
+
+- `l2_claimsponsor_address`
+  - used by bridge / claim sponsor flows
+
+Who "owns" the L2 in practice:
+
+- the main admin/control address is `l2_admin_address`
+
+Who gets funded on L2:
+
+- `l2_claimsponsor_address` via `l2_legacy_fund_accounts`
+- the first `l2_accounts_to_fund` addresses derived from
+  `l1_preallocated_mnemonic` via `l2_contract_setup`
+- operator addresses may also appear in alloc/genesis outputs
+
+
+18. Successful runtime sequence seen in practice
+------------------------------------------------
+
+The successful full run brought up:
+
+- `agglayer`
+- `cdk-erigon-rpc-001`
+- `cdk-erigon-sequencer-001`
+- `cdk-node-001`
+- `contracts-001`
+- `postgres-001`
+- `zkevm-bridge-service-001`
+- `zkevm-pool-manager-001`
+- `zkevm-prover-001`
+- `zkevm-stateless-executor-001`
+
+This is the minimal useful runtime for the chosen path.
+
+
+19. Key lessons for developers
+------------------------------
+
+1. Kurtosis is orchestration, not the rollup itself.
+
+2. The contract deployment phase is the source of truth.
+   If `combined.json`, genesis, or dynamic config are missing or wrong, the
+   rest of the stack is untrustworthy.
+
+3. L1 semantics matter.
+   External L1 is not just "provide RPC URL". The sequencer behavior depends on
+   the chosen L1 block type and finality expectations.
+
+4. "Service running" is not enough.
+   The RPC may be alive while the chain is still effectively unusable.
+
+5. `l2_admin_address` is the main operational/admin identity.
+
+6. For pre-prod and prod, these artifacts and secrets should not live only
+   inside a Kurtosis enclave. They should be archived and managed externally.
+
+
+20. Developer checklist
+-----------------------
+
+Before a run:
+
+- verify keys and roles
+- verify L1 RPC / WS
+- verify chain IDs
+- verify `chain_name`
+- verify deployment stages
+
+After contracts deployment:
+
+- save `combined.json`
+- save dynamic config and allocs
+- save genesis
+- record deployed contract addresses
+
+After full runtime bring-up:
+
+- verify sequencer is advancing
+- verify RPC answers reads and tx submission
+- verify `cdk-node` is healthy
+- verify bridge service is healthy
+- record public ports/endpoints
+
+
+21. Bottom line
+---------------
+
+For `cdk-erigon + rollup`, the repo works like this:
+
+- deploy contracts on L1
+- derive the chain artifacts from that deployment
+- launch cdk-erigon from those artifacts
+- launch supporting services around it
+- expose bridge and RPC on top of the resulting runtime
+
+If a developer understands:
+
+- `main.star`
+- `input_parser.star`
+- `contracts.sh`
+- `combined.json`
+- cdk-erigon config
+- role addresses and keystores
+
+they understand the core of how this repo brings up the network.

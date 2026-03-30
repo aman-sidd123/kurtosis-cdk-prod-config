@@ -1,0 +1,506 @@
+name: nightly
+
+on:
+  schedule:
+    - cron: 0 6 * * * # Run this workflow every day at 6 AM Paris time (UTC+2).
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+  id-token: write
+
+env:
+  ENCLAVE_NAME: cdk
+  DEVTOOLS_SLACK_ALERTS_CHANNEL_ID: C04DS0SG599
+  L1_EL_TYPE: geth
+  L1_CL_TYPE: lighthouse
+
+jobs:
+  check-version-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true  # prevent this job from failing the workflow
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check if job should be run
+        id: check-run
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN_READ }}
+        run: |
+          if [[ "${{ github.event.pull_request.head.repo.fork }}" == "true" ]]; then
+            echo "Prevent running this job on forks. Skipping this job."
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          if [[ -z "$GITHUB_TOKEN" ]]; then
+            echo "No Github token provided. Skipping this job."
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "::warning title=version-matrix::Version matrix job skipped."
+            exit 0
+          fi
+
+          echo "Running version matrix job."
+          echo "skip=false" >> $GITHUB_OUTPUT
+
+      - uses: actions/setup-python@v4
+        if: ${{ steps.check-run.outputs.skip == 'false' }}
+        with:
+          python-version: 3.13
+
+      - name: Install dependencies
+        if: ${{ steps.check-run.outputs.skip == 'false' }}
+        run: pip install -r scripts/version-matrix/requirements.txt
+
+      - name: Generate version matrix
+        if: ${{ steps.check-run.outputs.skip == 'false' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN_READ }}
+        run: |
+          echo "Generating version matrix with GitHub API..."
+          python scripts/version-matrix/extract-versions.py
+
+      - name: Generate markdown documentation
+        if: ${{ steps.check-run.outputs.skip == 'false' }}
+        run: python scripts/version-matrix/generate-markdown.py
+
+      - name: Check if there are changes
+        id: version-check
+        if: ${{ steps.check-run.outputs.skip == 'false' }}
+        run: |
+          has_diff=false
+          if [[ -n $(git status --porcelain) ]]; then
+            has_diff=true
+          fi
+          echo "HAS_DIFF=${has_diff}" >> $GITHUB_ENV
+          echo "HAS_DIFF=${has_diff}"
+
+      - uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
+        if: ${{ steps.check-run.outputs.skip == 'false' }}
+        with:
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": ${{ env.DEVTOOLS_SLACK_ALERTS_CHANNEL_ID }},
+              "text": "Kurtosis CDK Nightly - Version matrix check",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Kurtosis CDK Nightly>: version matrix is ${{ env.HAS_DIFF == 'true' && 'outdated ❌' || 'up to date ✅' }}"
+                  }
+                }${{ env.HAS_DIFF == 'true' && ',
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "Check the documentation at `scripts/version-matrix` to update it"
+                  }
+                }' || '' }}
+              ]
+            }
+
+      - name: Display check result
+        if: ${{ steps.check-run.outputs.skip == 'false' }}
+        run: |
+          if [[ "${{ env.HAS_DIFF }}" == "true" ]]; then
+            echo "❌ Error: Version matrix is not up to date. Check the documentation at scripts/version-matrix to update it"
+            git status --porcelain
+            git diff
+            exit 1
+          else
+            echo "✅ Version matrix is up to date"
+          fi
+
+  run-without-args:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pre kurtosis run
+        uses: ./.github/actions/kurtosis-pre-run
+        with:
+          docker_username: ${{ secrets.DOCKER_USERNAME }}
+          docker_token: ${{ secrets.DOCKER_TOKEN }}
+          pull_images_from_gcr: "false"
+
+      - name: Kurtosis run
+        run: kurtosis run --enclave=${{ env.ENCLAVE_NAME }} .
+
+      - name: Inspect enclave
+        run: kurtosis enclave inspect ${{ env.ENCLAVE_NAME }}
+
+      - name: Monitor rollup progress
+        working-directory: .github/scripts
+        run: ./monitor.sh ${{ env.ENCLAVE_NAME }}
+
+      - name: Run bridge tests
+        uses: ./.github/actions/bridge-tests
+        with:
+          enclave_name: ${{ env.ENCLAVE_NAME }}
+
+      - name: Post kurtosis run
+        if: always()
+        uses: ./.github/actions/kurtosis-post-run
+        with:
+          enclave_name: ${{ env.ENCLAVE_NAME }}
+
+  list-ymls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: set-matrix
+        run: |
+          file_paths=$(ls -R ./.github/tests/cdk-erigon/*.yml ./.github/tests/op-reth/*.yml)
+          echo "file_paths:"
+          echo "${file_paths}"
+          echo
+
+          matrix=$(echo "${file_paths}" | while read -r file_path; do
+            file_name=$(basename -s ".yml" "${file_path}")
+            folder_name=$(basename $(dirname "${file_path}"))
+            if [[ "${folder_name}" == "cdk-erigon" ]] || [[ "${folder_name}" == "op-reth" ]]; then
+              job_name="${folder_name}-${file_name}"
+            elif [[ "${folder_name}" == "nightly" ]]; then
+              job_name="nightly-${file_name}"
+            else
+              job_name="${file_name}"
+            fi
+            echo "{\"name\": \"$job_name\", \"path\": \"$file_path\"}"
+          done | jq -s -c '.')
+          echo "matrix=${matrix}" >> $GITHUB_OUTPUT
+          echo "matrix:"
+          echo "${matrix}" | jq
+
+  run-with-args:
+    needs: list-ymls
+    name: run-with-${{ matrix.file.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        file: ${{ fromJson(needs.list-ymls.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pre kurtosis run
+        uses: ./.github/actions/kurtosis-pre-run
+        with:
+          docker_username: ${{ secrets.DOCKER_USERNAME }}
+          docker_token: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Kurtosis run
+        run: kurtosis run --enclave=${{ env.ENCLAVE_NAME }} --args-file=${{ matrix.file.path }} .
+
+      - name: Inspect enclave
+        run: kurtosis enclave inspect ${{ env.ENCLAVE_NAME }}
+
+      - name: Monitor rollup progress
+        run: |
+          sequencer_type=$(yq --raw-output '.args.sequencer_type' ${{ matrix.file.path }})
+          consensus_contract_type=$(yq --raw-output '.args.consensus_contract_type' ${{ matrix.file.path }})
+          ./.github/scripts/monitor.sh ${{ env.ENCLAVE_NAME }} "$sequencer_type" "$consensus_contract_type"
+
+      - name: Run bridge tests
+        uses: ./.github/actions/bridge-tests
+        with:
+          enclave_name: ${{ env.ENCLAVE_NAME }}
+
+      - name: Post kurtosis run
+        if: always()
+        uses: ./.github/actions/kurtosis-post-run
+        with:
+          enclave_name: ${{ env.ENCLAVE_NAME }}
+          args_filename: ${{ matrix.file.name }}
+
+  run-with-op-succinct:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pre kurtosis run
+        uses: ./.github/actions/kurtosis-pre-run
+        with:
+          docker_username: ${{ secrets.DOCKER_USERNAME }}
+          docker_token: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Kurtosis run
+        run: kurtosis run --enclave=${{ env.ENCLAVE_NAME }} --args-file=./.github/tests/op-succinct/mock-prover.yml .
+
+      - name: Inspect enclave
+        run: kurtosis enclave inspect ${{ env.ENCLAVE_NAME }}
+
+      - name: Monitor rollup progress
+        working-directory: .github/scripts
+        run: ./monitor.sh ${{ env.ENCLAVE_NAME }} op-reth fep
+
+      - name: Install bats
+        uses: bats-core/bats-action@42fcc8700f773c075a16a90eb11674c0318ad507 # 3.0.1
+        with:
+          support-path: "${{ github.workspace }}/lib/bats-support"
+          assert-path: "${{ github.workspace }}/lib/bats-assert"
+          detik-path: "${{ github.workspace }}/lib/bats-detik"
+          file-path: "${{ github.workspace }}/lib/bats-file"
+
+      - name: Install polycli
+        run: |
+          polycli_version="v0.1.87"
+          pushd $(mktemp -d) || exit 1
+          curl -s -L "https://github.com/0xPolygon/polygon-cli/releases/download/${polycli_version}/polycli_${polycli_version}_linux_amd64.tar.gz" > polycli.tar.gz
+          tar xf polycli.tar.gz
+          mv polycli_* /usr/local/bin/polycli
+          polycli version
+
+      - name: Checkout agglayer-e2e
+        uses: actions/checkout@v4
+        with:
+          repository: agglayer/e2e
+          path: agglayer-e2e
+          ref: 3fb8af01358583e8c6df167beac9c1d2b06961c1 # 2026-03-05
+
+      - name: Run bridge tests and op optimistic mode tests
+        run: |
+          set -eo pipefail
+          pushd agglayer-e2e || exit 1
+
+          set -a
+          source ./tests/.env
+          set +a
+
+          export BATS_LIB_PATH="$PWD/core/helpers/lib"
+          export PROJECT_ROOT="$PWD"
+          export ENCLAVE_NAME="${{ env.ENCLAVE_NAME }}"
+          export CLAIM_WAIT_DURATION="20m"
+
+          # Run op optimistic mode tests
+          bats ./tests/op/optimistic-mode.bats || exit 1
+
+          # Run bridge tests
+          kurtosis service stop ${{ env.ENCLAVE_NAME }} bridge-spammer-001
+          bats --filter 'bridge native ETH from L1 to L2' ./tests/agglayer/bridges.bats || exit 1
+          bats --filter 'bridge native ETH from L2 to L1' ./tests/agglayer/bridges.bats || exit 1
+
+      - name: Post kurtosis run
+        if: always()
+        uses: ./.github/actions/kurtosis-post-run
+        with:
+          enclave_name: ${{ env.ENCLAVE_NAME }}
+          args_filename: cdk-op-reth-succinct
+
+  run-with-additional-services:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pre kurtosis run
+        uses: ./.github/actions/kurtosis-pre-run
+        with:
+          docker_username: ${{ secrets.DOCKER_USERNAME }}
+          docker_token: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Kurtosis run
+        run: kurtosis run --enclave=${{ env.ENCLAVE_NAME }} --args-file=./.github/tests/additional-services.yml .
+
+      - name: Inspect enclave
+        run: kurtosis enclave inspect ${{ env.ENCLAVE_NAME }}
+
+      - name: Verify arpeggio rpc
+        run: |
+          result=$(yq '.args.additional_services | contains(["arpeggio"])' ./.github/tests/additional-services.yml)
+          if [ "$result" = "true" ]; then
+            cast bn --rpc-url $(kurtosis port print ${{ env.ENCLAVE_NAME }} arpeggio-001 rpc)
+          else
+            echo "Arpeggio is not deployed."
+          fi
+
+      - name: Verify blutgang rpc
+        run: |
+          result=$(yq '.args.additional_services | contains(["blutgang"])' ./.github/tests/additional-services.yml)
+          if [ "$result" = "true" ]; then
+            cast bn --rpc-url $(kurtosis port print ${{ env.ENCLAVE_NAME }} blutgang-001 http)
+          else
+            echo "Blutgang is not deployed."
+          fi
+
+      - name: Verify erpc rpc
+        run: |
+          result=$(yq '.args.additional_services | contains(["erpc"])' ./.github/tests/additional-services.yml)
+          if [ "$result" = "true" ]; then
+            cast bn --rpc-url "$(kurtosis port print ${{ env.ENCLAVE_NAME }} erpc-001 rpc)/main/evm/2151908"
+          else
+            echo "ERPC is not deployed."
+          fi
+
+      - name: Verify that prometheus collects panoptichain metrics
+        run: |
+          result=$(yq '.args.additional_services | contains(["prometheus_grafana"])' ./.github/tests/additional-services.yml)
+          if [ "$result" = "true" ]; then
+            echo "Wait for one minute while Prometheus gathers metrics..."
+            sleep 60
+
+            echo "Retrieve Panoptichain metrics from Prometheus..."
+            panoptichain_metric="panoptichain_system_uptime"
+            prometheus_url=$(kurtosis port print ${{ env.ENCLAVE_NAME }} prometheus-001 http)
+            prometheus_query=$(curl "$prometheus_url/api/v1/query?query=$panoptichain_metric")
+            echo $prometheus_query | jq
+            if [ "$(jq -r '.data.result[0].metric.__name__' <<<$prometheus_query)" == "$panoptichain_metric" ]; then
+              echo "✅ Prometheus collects panoptichain metrics!"
+            else
+              echo "❌ Prometheus does not collect panoptichain metrics..."
+              exit 1
+            fi
+          else
+            echo "Prometheus is not deployed."
+          fi
+
+      - name: Post kurtosis run
+        if: always()
+        uses: ./.github/actions/kurtosis-post-run
+        with:
+          enclave_name: ${{ env.ENCLAVE_NAME }}
+          args_filename: additional-services
+
+  run-with-external-l1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pre kurtosis run
+        uses: ./.github/actions/kurtosis-pre-run
+        with:
+          docker_username: ${{ secrets.DOCKER_USERNAME }}
+          docker_token: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Deploy local L1 chain
+        run: kurtosis run --enclave=${{ env.ENCLAVE_NAME }} --args-file=./.github/tests/external-l1/deploy-local-l1.yml .
+
+      - name: Deploy to local L1 chain
+        run: kurtosis run --enclave=${{ env.ENCLAVE_NAME }} --args-file=./.github/tests/external-l1/deploy-cdk-to-local-l1.yml .
+
+      - name: Inspect enclave
+        run: kurtosis enclave inspect ${{ env.ENCLAVE_NAME }}
+
+      - name: Monitor rollup progress
+        working-directory: .github/scripts
+        run: ./monitor.sh ${{ env.ENCLAVE_NAME }}
+
+      - name: Run bridge tests
+        uses: ./.github/actions/bridge-tests
+        with:
+          enclave_name: ${{ env.ENCLAVE_NAME }}
+
+      - name: Post kurtosis run
+        if: always()
+        uses: ./.github/actions/kurtosis-post-run
+        with:
+          enclave_name: ${{ env.ENCLAVE_NAME }}
+          args_filename: deploy-to-external-l1
+
+  run-with-pre-deployed-gas-token:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pre kurtosis run
+        uses: ./.github/actions/kurtosis-pre-run
+        with:
+          docker_username: ${{ secrets.DOCKER_USERNAME }}
+          docker_token: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Deploy L1 chain
+        run: kurtosis run --enclave=${{ env.ENCLAVE_NAME }} --args-file=./.github/tests/external-l1/deploy-local-l1.yml .
+
+      - name: Deploy gas token on L1
+        run: |
+          agglayer_contracts_version="v8.0.0-rc.4-fork.12"
+          echo "Cloning zkevm-contracts $agglayer_contracts_version..."
+          git clone https://github.com/0xPolygonHermez/zkevm-contracts
+          pushd zkevm-contracts
+          git checkout $agglayer_contracts_version
+          npm install @openzeppelin/contracts@4.8.2
+          printf "[profile.default]\nsrc = 'contracts'\nout = 'out'\nlibs = ['node_modules']\n" > foundry.toml
+
+          echo "Deploying gas token to L1..."
+          l1_rpc_url=$(kurtosis port print ${{ env.ENCLAVE_NAME }} el-1-${{ env.L1_EL_TYPE }}-${{ env.L1_CL_TYPE }} rpc)
+          forge create \
+            --broadcast \
+            --json \
+            --rpc-url $l1_rpc_url \
+            --mnemonic "giant issue aisle success illegal bike spike question tent bar rely arctic volcano long crawl hungry vocal artwork sniff fantasy very lucky have athlete" \
+            contracts/mocks/ERC20PermitMock.sol:ERC20PermitMock \
+            --constructor-args "CDK Gas Token" "CDK" "0xE34aaF64b29273B7D567FCFc40544c014EEe9970" "1000000000000000000000000" \
+            > gasToken-erc20.json
+          gas_token_address=$(jq --raw-output '.deployedTo' gasToken-erc20.json)
+          if [[ -z "$gas_token_address" || "$gas_token_address" == "null" ]]; then
+            echo "Unable to deploy gas token"
+            exit 1
+          fi
+          echo "Gas token contract deployed at $gas_token_address on L1"
+          popd
+          yq -Y --in-place ".args.gas_token_address = \"$gas_token_address\"" ./.github/tests/nightly/gas-token/pre-deployed.yml
+
+      - name: Deploy the rest of the stack
+        run: kurtosis run --enclave=${{ env.ENCLAVE_NAME }} --args-file=./.github/tests/nightly/gas-token/pre-deployed.yml .
+
+      - name: Inspect enclave
+        run: kurtosis enclave inspect ${{ env.ENCLAVE_NAME }}
+
+      - name: Monitor rollup progress
+        working-directory: .github/scripts
+        run: ./monitor.sh ${{ env.ENCLAVE_NAME }} cdk-erigon cdk-validium
+
+      - name: Run bridge tests
+        uses: ./.github/actions/bridge-tests
+        with:
+          enclave_name: ${{ env.ENCLAVE_NAME }}
+
+      - name: Post kurtosis run
+        if: always()
+        uses: ./.github/actions/kurtosis-post-run
+        with:
+          enclave_name: ${{ env.ENCLAVE_NAME }}
+          args_filename: pre-deployed-gas-token
+
+  workflow-summary:
+    runs-on: ubuntu-latest
+    if: ${{ always() && github.event_name == 'schedule' }}
+    needs: 
+      - run-without-args
+      - run-with-args
+      - run-with-op-succinct
+      - run-with-additional-services
+      - run-with-external-l1
+      - run-with-pre-deployed-gas-token
+    steps:
+      - uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
+        with:
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          method: chat.postMessage
+          payload: |
+            {
+              "channel": ${{ env.DEVTOOLS_SLACK_ALERTS_CHANNEL_ID }},
+              "text": "Kurtosis CDK Nightly - Test Summary",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Kurtosis CDK Nightly>: ${{ contains(needs.*.result, 'failure') && 'some tests failed ❌' || (contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')) && 'some tests were skipped ⚠️' || 'all tests passed ✅' }}",
+                  }
+                }
+              ]
+            }

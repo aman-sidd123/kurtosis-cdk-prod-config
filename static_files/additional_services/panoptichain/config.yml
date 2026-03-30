@@ -1,0 +1,58 @@
+# See https://github.com/0xPolygon/panoptichain/blob/main/config.yml for how to
+# configure this file.
+http:
+  address: "0.0.0.0"
+
+providers:
+  system:
+    interval: 15s
+
+  rpc:
+    - name: "L1"
+      url: "{{.l1_rpc_url}}"
+      label: "L1"
+      contracts:
+        rollup_manager_address: "{{.rollup_manager_address}}"
+      time_to_mine:
+        sender: "{{.l1_sender_address}}"
+        sender_private_key: "{{.l1_sender_private_key}}"
+        receiver: "{{.l1_receiver_address}}"
+        value: 10000000000000 # 0.00001 ether
+        gas_limit: 21000
+        gas_price_factor: 3
+      accounts:
+        - "{{.l1_sender_address}}"
+        - "{{.l2_sequencer_address}}"
+        - "{{.l2_aggregator_address}}"
+        - "{{.l2_claimsponsor_address}}"
+        - "{{.l2_admin_address}}"
+        - "{{.l2_dac_address}}"
+
+    - name: "L2"
+      url: "{{.l2_rpc_url}}"
+      label: "L2"
+      contracts:
+        global_exit_root_l2_address: "{{.l2_ger_address}}"
+        zkevm_bridge_address: "{{.l2_bridge_address}}"
+      time_to_mine:
+        sender: "{{.l2_sender_address}}"
+        sender_private_key: "{{.l2_sender_private_key}}"
+        receiver: "{{.l2_receiver_address}}"
+        value: 10000000000000 # 0.00001 ether
+        gas_limit: 21000
+        gas_price_factor: 3
+      accounts:
+        - "{{.l2_sender_address}}"
+        - "{{.l2_admin_address}}"
+        - "{{.l2_claimsponsor_address}}"
+
+networks:
+  - name: "L1"
+    chain_id: "{{.l1_chain_id}}"
+
+  - name: "L2"
+    chain_id: "{{.l2_chain_id}}"
+    polygon_zkevm: true
+
+logs:
+  verbosity: "{{.log_level}}"

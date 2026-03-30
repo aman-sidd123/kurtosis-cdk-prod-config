@@ -1,0 +1,25 @@
+{
+  "ChainName": "dynamic-{{.chain_name}}",
+  "chainId": {{.chain_id}},
+  "consensus": "ethash",
+  "homesteadBlock": 0,
+  "daoForkBlock": 0,
+  "eip150Block": 0,
+  "eip155Block": 0,
+  "byzantiumBlock": 0,
+  "constantinopleBlock": 0,
+  "petersburgBlock": 0,
+  "istanbulBlock": 0,
+  "muirGlacierBlock": 0,
+  "berlinBlock": 0,
+  "londonBlock": {{if .enable_normalcy}}0{{else}}9999999999999999999999999999999999999999999999999{{end}},
+  "arrowGlacierBlock": 9999999999999999999999999999999999999999999999999,
+  "grayGlacierBlock": 9999999999999999999999999999999999999999999999999,
+  {{if not .enable_normalcy}}"terminalTotalDifficulty": 58750000000000000000000,{{end}}
+  "terminalTotalDifficultyPassed": false,
+  "shanghaiTime": {{if .enable_normalcy}}0{{else}}9999999999999999999999999999999999999999999999999{{end}},
+  "cancunTime": {{if .enable_normalcy}}0{{else}}9999999999999999999999999999999999999999999999999{{end}},
+  "normalcyBlock": {{if .enable_normalcy}}0{{else}}9999999999999999999999999999999999999999999999999{{end}},
+  "pragueTime": {{if .enable_normalcy}}0{{else}}9999999999999999999999999999999999999999999999999{{end}},
+  "ethash": {}
+}
