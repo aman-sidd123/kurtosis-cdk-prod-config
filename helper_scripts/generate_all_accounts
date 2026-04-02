@@ -1,0 +1,20 @@
+1. cast wallet new-mnemonic
+
+2.
+PK=""
+
+ROLES=("sequencer" "aggregator" "admin" "dac" "sovereignadmin" "claimsponsor")
+
+for i in {0..5}; do
+  PK=$(cast wallet derive-private-key \
+    --mnemonic "$MNEMONIC" \
+    --mnemonic-index $i)
+
+  ADDR=$(cast wallet address --private-key $PK)
+
+  ROLE=${ROLES[$i]}
+
+  echo "l2_${ROLE}_address: \"$ADDR\""
+  echo "l2_${ROLE}_private_key: \"$PK\""
+  echo ""
+done

@@ -39,4 +39,6 @@ cache/
 
 anvil-preprod.private.yml
 
-artifacts/preprod-baseline/anvil-full/config/
+artifacts/preprod-baseline/
+
+sepolia.yml
