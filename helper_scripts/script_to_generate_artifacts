@@ -1,0 +1,9 @@
+mkdir -p ./artifacts/preprod-baseline/sepolia-full/{output,keystores,config}
+
+kurtosis files storeservice --name sepolia-full-output cdk contracts-001 /opt/output
+kurtosis files storeservice --name sepolia-full-keystores cdk contracts-001 /opt/keystores
+
+kurtosis files download cdk sepolia-full-output ./artifacts/preprod-baseline/sepolia-full/output
+kurtosis files download cdk sepolia-full-keystores ./artifacts/preprod-baseline/sepolia-full/keystores
+
+cp ./sepolia.yml ./artifacts/preprod-baseline/sepolia-full/config/

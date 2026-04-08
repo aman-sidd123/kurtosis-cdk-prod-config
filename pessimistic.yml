@@ -1,0 +1,25 @@
+deployment_stages:
+  deploy_l2_contracts: true
+
+args:
+  sequencer_type: cdk-erigon
+  consensus_contract_type: pessimistic
+  additional_services:
+    - bridge_spammer
+
+  agglayer_image: agglayer:local
+  aggkit_image: ghcr.io/agglayer/aggkit:0.5.4
+  zkevm_prover_image: hermeznetwork/zkevm-prover:v8.0.0-RC16-fork.12
+  cdk_erigon_image: ghcr.io/0xpolygon/cdk-erigon:v2.65.0-RC3
+
+  agglayer_prover_primary_prover: cpu-prover
+  agglayer_cpu_prover_max_concurrency_limit: 1
+  agglayer_cpu_prover_proving_timeout: "1h"
+  agglayer_input_backpressure_buffer_size: 1000
+  agglayer_prover_buffer_size: 100
+
+  erigon_strict_mode: false
+  gas_token_enabled: false
+  zkevm_use_real_verifier: true
+  enable_normalcy: true
+  aggkit_components: aggsender,bridge

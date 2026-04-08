@@ -277,7 +277,7 @@ DEFAULT_ROLLUP_ARGS = {
     "sp1_prover_key": "0x5a92d2a2d651dcfc6be49680c84b6073dc899266297447c46f90aae8f46b3532",
     # If we're setting an sp1 key, we might want to specify a specific RPC url as well
     "sp1_cluster_endpoint": "https://rpc.production.succinct.xyz",
-    # The type of primary prover to use in agglayer-prover. Note: if mock-prover is selected,
+    # The type of primary prover to use in agglayer-prover. Valid values include mock-prover, network-prover, and cpu-prover.
     # agglayer-node will also be configured with a mock verifier
     "agglayer_prover_primary_prover": "mock-prover",
     # The URL where the agglayer can be reached for gRPC

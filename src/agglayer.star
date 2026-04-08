@@ -91,6 +91,10 @@ def create_agglayer_config_artifact(
                     "agglayer_admin_port": args["agglayer_admin_port"],
                     "prometheus_port": args["agglayer_metrics_port"],
                     "l2_rpc_name": args["l2_rpc_name"],
+                    "agglayer_prover_buffer_size": args.get("agglayer_prover_buffer_size", 100),
+                    "agglayer_input_backpressure_buffer_size": args.get("agglayer_input_backpressure_buffer_size", 1000),
+                    "agglayer_cpu_prover_max_concurrency_limit": args.get("agglayer_cpu_prover_max_concurrency_limit", 1),
+                    "agglayer_cpu_prover_proving_timeout": args.get("agglayer_cpu_prover_proving_timeout", "1h"),
                     # verifier
                     "mock_verifier": args["agglayer_prover_primary_prover"]
                     == "mock-prover",

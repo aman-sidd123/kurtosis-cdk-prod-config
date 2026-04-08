@@ -479,7 +479,7 @@ zkevm.l1-query-delay: 6_000
 # Options: "latest" (most recent), "safe" (unlikely to be re-orged), "finalized" (confirmed),
 # where "finalized" is the most conservative and secure option.
 # Default: finalized
-zkevm.l1-highest-block-type: latest
+zkevm.l1-highest-block-type: finalized
 
 # The address of the MATIC token contract on the L1 network.
 # Default: 0x0

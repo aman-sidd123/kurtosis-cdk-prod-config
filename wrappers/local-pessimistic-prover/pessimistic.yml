@@ -1,0 +1,16 @@
+args:
+  sequencer_type: cdk-erigon
+  consensus_contract_type: pessimistic
+  additional_services: []
+  erigon_strict_mode: false
+  gas_token_enabled: false
+  zkevm_use_real_verifier: true
+  enable_normalcy: true
+  aggkit_components: aggsender,bridge
+
+  # Replace with your locally built Agglayer image.
+  agglayer_image: agglayer:local
+
+  # Local CPU prover tuning.
+  agglayer_cpu_prover_max_concurrency_limit: 1
+  agglayer_cpu_prover_proving_timeout: "1h"

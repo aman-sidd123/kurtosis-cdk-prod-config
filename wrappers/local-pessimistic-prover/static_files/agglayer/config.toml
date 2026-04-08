@@ -1,0 +1,80 @@
+prover-buffer-size = {{ .agglayer_prover_buffer_size }}
+
+[full-node-rpcs]
+{{- if eq .sequencer_type "op-reth" }}
+1 = "{{ .op_el_rpc_url }}"
+{{- else }}
+1 = "http://{{ .l2_rpc_name }}{{ .deployment_suffix }}:8545"
+{{- end }}
+
+[l2]
+rpc-timeout = "45s"
+
+[proof-signers]
+1 = "{{ .l2_sequencer_address }}"
+
+[log]
+level = "{{ .log_level }}"
+outputs = []
+format = "{{ .log_format }}"
+
+[rpc]
+grpc-port = {{ .agglayer_grpc_port }}
+readrpc-port = {{ .agglayer_readrpc_port }}
+admin-port = {{ .agglayer_admin_port }}
+host = "0.0.0.0"
+request-timeout = "3m"
+
+[rate-limiting]
+send-tx = "unlimited"
+
+[rate-limiting.network]
+
+[outbound.rpc.settle-tx]
+max-retries = 3
+retry-interval = "7s"
+confirmations = 1
+
+[outbound.rpc.settle-cert]
+max-retries = 3
+retry-interval = "7s"
+confirmations = 1
+
+[l1]
+chain-id = {{ .l1_chain_id }}
+node-url = "{{ .l1_rpc_url }}"
+ws-node-url = "{{ .l1_ws_url }}"
+rollup-manager-contract = "{{ .rollup_manager_address }}"
+polygon-zkevm-global-exit-root-v2-contract = "{{ .l1_ger_address }}"
+rpc-timeout = "45s"
+
+[auth.local]
+private-keys = [
+    { path = "/etc/agglayer/aggregator.keystore", password = "{{ .l2_keystore_password }}" },
+]
+
+[telemetry]
+prometheus-addr = "0.0.0.0:{{ .prometheus_port }}"
+
+[epoch.block-clock]
+epoch-duration = 15
+genesis-block = {{ .rollup_manager_block_number }}
+
+[shutdown]
+runtime-timeout = "5s"
+
+[certificate-orchestrator]
+input-backpressure-buffer-size = {{ .input_backpressure_buffer_size }}
+
+[certificate-orchestrator.prover.sp1-local]
+
+[storage]
+db-path = "/etc/agglayer/storage"
+
+[prover.cpu-prover]
+max-concurrency-limit = {{ .agglayer_cpu_prover_max_concurrency_limit }}
+proving-timeout = "{{ .agglayer_cpu_prover_proving_timeout }}"
+
+[grpc]
+max-decoding-message-size = 104857600
+max-encoding-message-size = 104857600

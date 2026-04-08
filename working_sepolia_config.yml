@@ -1,0 +1,70 @@
+deployment_stages:
+  deploy_l1: false
+
+args:
+  # ── L1 Funding Account ────────────────────────────────────────────
+  # Generate with: polycli wallet inspect --mnemonic '<mnemonic>' --addresses 9
+  # This account must be funded with Sepolia ETH (at least 1 ETH per L2 account)
+  l1_preallocated_mnemonic: "REPLACE_WITH_YOUR_MNEMONIC"
+  l1_preallocated_private_key: "REPLACE_WITH_0x_PRIVATE_KEY"
+
+  # ── L2 Keystore ───────────────────────────────────────────────────
+  # Any strong password string
+  l2_keystore_password: "REPLACE_WITH_KEYSTORE_PASSWORD"
+
+  # ── L2 Accounts ───────────────────────────────────────────────────
+  # Derive all accounts from your mnemonic using:
+  # polycli wallet inspect --mnemonic '<mnemonic>' --addresses 9 | \
+  #   jq -r '.Addresses[] | [.ETHAddress, .HexPrivateKey] | @tsv' | \
+  #   awk 'BEGIN{split("sequencer,aggregator,claimtxmanager,timelock,admin,loadtest,agglayer,dac,proofsigner",roles,",")} \
+  #        {print "zkevm_l2_" roles[NR] "_address: \"" $1 "\""; \
+  #         print "zkevm_l2_" roles[NR] "_private_key: \"0x" $2 "\"\n"}'
+
+  l2_sequencer_address: "REPLACE_WITH_0x_ADDRESS"
+  l2_sequencer_private_key: "REPLACE_WITH_0x_PRIVATE_KEY"
+
+  l2_aggregator_address: "REPLACE_WITH_0x_ADDRESS"
+  l2_aggregator_private_key: "REPLACE_WITH_0x_PRIVATE_KEY"
+
+  l2_admin_address: "REPLACE_WITH_0x_ADDRESS"
+  l2_admin_private_key: "REPLACE_WITH_0x_PRIVATE_KEY"
+
+  l2_dac_address: "REPLACE_WITH_0x_ADDRESS"
+  l2_dac_private_key: "REPLACE_WITH_0x_PRIVATE_KEY"
+
+  l2_sovereignadmin_address: "REPLACE_WITH_0x_ADDRESS"
+  l2_sovereignadmin_private_key: "REPLACE_WITH_0x_PRIVATE_KEY"
+
+  l2_claimsponsor_address: "REPLACE_WITH_0x_ADDRESS"
+  l2_claimsponsor_private_key: "REPLACE_WITH_0x_PRIVATE_KEY"
+
+  # ── Chain Config ──────────────────────────────────────────────────
+  sequencer_type: cdk-erigon
+  consensus_contract_type: rollup
+  additional_services: []
+
+  # ── L1 Config ─────────────────────────────────────────────────────
+  l1_chain_id: 11155111   # Sepolia
+
+  # HTTP RPC — e.g. https://sepolia.infura.io/v3/<YOUR_KEY>
+  l1_rpc_url: "REPLACE_WITH_SEPOLIA_HTTP_RPC_URL"
+
+  # WebSocket — see docs/nginx-ws-proxy.md for setting up a local WS proxy
+  # Docker containers reach the host WS proxy via the bridge gateway IP (172.17.0.1)
+  # Run: ip addr show docker0 | grep "inet " to confirm your bridge IP
+  l1_ws_url: "ws://172.17.0.1:8547"
+
+  l1_funding_amount: "1ether"
+
+  # ── Prover ────────────────────────────────────────────────────────
+  # Fork 12 prover image — change fork ID suffix to match your zkevm_rollup_fork_id
+  zkevm_prover_image: hermeznetwork/zkevm-prover:v8.0.0-RC16-fork.12
+
+  # ── L2 Chain Identity ─────────────────────────────────────────────
+  chain_name: "REPLACE_WITH_YOUR_CHAIN_NAME"
+  l2_chain_id: 123456789   # REPLACE with your unique chain ID
+  l2_network_id: 1
+
+  # ── Logging ───────────────────────────────────────────────────────
+  log_level: info
+  log_format: json

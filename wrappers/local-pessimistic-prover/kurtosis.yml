@@ -1,0 +1,4 @@
+name: github.com/0xPolygon/kurtosis-cdk/wrappers/local-pessimistic-prover
+description: |
+  A Kurtosis wrapper package that reuses kurtosis-cdk but deploys Agglayer with
+  an upstream-style local pessimistic prover configuration.

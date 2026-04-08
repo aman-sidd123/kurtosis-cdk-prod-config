@@ -1,0 +1,262 @@
+constants = import_module("../../src/package_io/constants.star")
+input_parser = import_module("../../src/package_io/input_parser.star")
+contracts_util = import_module("../../src/contracts/util.star")
+op_succinct_package = import_module("../../src/chain/op-reth/op_succinct_proposer.star")
+
+additional_services_launcher = import_module("../../src/additional_services/launcher.star")
+agglayer_package = "./src/agglayer.star"
+l1_launcher = import_module("../../src/l1/launcher.star")
+chain_launcher = import_module("../../src/chain/launcher.star")
+databases_package = "../../src/chain/shared/databases.star"
+agglayer_contracts_package = "../../src/contracts/agglayer.star"
+sovereign_contracts_package = import_module("../../src/contracts/sovereign.star")
+mitm_package = "../../src/mitm.star"
+
+
+def run(plan, args={}):
+    (deployment_stages, args, op_stack_args) = input_parser.parse_args(plan, args)
+    plan.print("Deploying the following components: " + str(deployment_stages))
+    plan.print(
+        "Deploying CDK stack with local pessimistic Agglayer wrapper config: "
+        + str(args)
+    )
+    sequencer_type = args.get("sequencer_type")
+
+    l1_context = None
+    if deployment_stages.get("deploy_l1", False):
+        plan.print("Deploying a local L1")
+        l1_context = l1_launcher.launch(plan, args)
+    else:
+        plan.print("Skipping the deployment of a local L1")
+        l1_context = struct(
+            chain_id=args.get("l1_chain_id"),
+            rpc_url=args.get("l1_rpc_url"),
+            all_participants=[],
+        )
+
+    if deployment_stages.get("deploy_op_succinct", False):
+        l1_genesis_artifact = plan.get_files_artifact(name="el_cl_genesis_data")
+        new_genesis_name = "{}.json".format(args.get("l1_chain_id"))
+        result = plan.run_sh(
+            name="rename-l1-genesis",
+            description="Rename L1 genesis",
+            files={"/tmp": l1_genesis_artifact},
+            run="mv /tmp/genesis.json /tmp/{}".format(new_genesis_name),
+            store=[
+                StoreSpec(
+                    src="/tmp/{}".format(new_genesis_name),
+                    name="el_cl_genesis_data_for_op_succinct",
+                )
+            ],
+        )
+        if len(result.files_artifacts) != 1:
+            fail("The service should have generated 1 artifact.")
+
+    if deployment_stages.get("deploy_op_succinct", False):
+        op_succinct_package.extract_fetch_l2oo_config(plan, args)
+
+    contract_setup_addresses = {}
+    sovereign_contract_setup_addresses = {}
+    if deployment_stages.get("deploy_agglayer_contracts_on_l1", False):
+        plan.print("Deploying agglayer contracts on L1")
+        import_module(agglayer_contracts_package).run(
+            plan, args, deployment_stages, op_stack_args
+        )
+
+        if sequencer_type == constants.SEQUENCER_TYPE.op_reth:
+            plan.print("Creating new rollup type and creating rollup on L1")
+            sovereign_contracts_package.run(
+                plan, args, op_stack_args["predeployed_contracts"]
+            )
+
+            import_module(
+                agglayer_contracts_package
+            ).create_sovereign_predeployed_genesis(plan, args)
+
+            plan.print("Deploying an OP Stack rollup with args: " + str(op_stack_args))
+            optimism_package = op_stack_args["source"]
+            import_module(optimism_package).run(plan, op_stack_args)
+
+            op_deployer_configs_artifact = plan.get_files_artifact(
+                name="op-deployer-configs",
+            )
+            l1_op_contract_addresses = contracts_util.get_l1_op_contract_addresses(
+                plan, args, op_deployer_configs_artifact
+            )
+
+            sovereign_contracts_package.fund_addresses(
+                plan, args, l1_op_contract_addresses, args["l1_rpc_url"]
+            )
+            sovereign_contracts_package.fund_addresses(
+                plan,
+                args,
+                contracts_util.get_l2_addresses_to_fund(args),
+                args["op_el_rpc_url"],
+            )
+
+            if deployment_stages.get("deploy_op_succinct", False):
+                op_succinct_package.create_evm_sketch_genesis(plan, args)
+                plan.exec(
+                    description="Deploying op-succinct contracts",
+                    service_name="contracts" + args["deployment_suffix"],
+                    recipe=ExecRecipe(
+                        command=[
+                            "/bin/bash",
+                            "-c",
+                            "cp {1}/deploy-op-succinct-contracts.sh /opt/op-succinct/ && chmod +x {0} && {0}".format(
+                                "/opt/op-succinct/deploy-op-succinct-contracts.sh",
+                                constants.SCRIPTS_DIR,
+                            ),
+                        ]
+                    ),
+                )
+                plan.print("Extracting environment variables for op-succinct")
+                op_succinct_env_vars = contracts_util.get_op_succinct_env_vars(
+                    plan, args
+                )
+                args = args | op_succinct_env_vars
+                l2oo_vars = contracts_util.get_op_succinct_l2oo_config(plan, args)
+                args = args | l2oo_vars
+
+            plan.print("Initializing rollup")
+            sovereign_contracts_package.init_rollup(plan, args, deployment_stages)
+            sovereign_contract_setup_addresses = (
+                contracts_util.get_sovereign_contract_setup_addresses(plan, args)
+            )
+
+        contract_setup_addresses = contracts_util.get_contract_setup_addresses(
+            plan, args, deployment_stages
+        )
+    else:
+        plan.print("Skipping the deployment of agglayer contracts on L1")
+
+    if (
+        "rollup_manager_address" in args
+        and "rollup_manager_block_number" in args
+        and "l2_ger_address" in args
+        and "polygon_data_committee_address" in args
+    ):
+        plan.print("Deploying helper service to retrieve rollup data")
+        deploy_helper_service(plan, args)
+        contract_setup_addresses = contracts_util.get_contract_setup_addresses(
+            plan, args
+        )
+    else:
+        plan.print("Skipping the deployment of helper service to retrieve rollup data")
+
+    if deployment_stages.get("deploy_databases", False):
+        plan.print("Deploying databases")
+        import_module(databases_package).run(plan, args)
+    else:
+        plan.print("Skipping the deployment of databases")
+
+    genesis_artifact = ""
+    if sequencer_type == constants.SEQUENCER_TYPE.cdk_erigon:
+        if deployment_stages.get("deploy_cdk_central_environment", False):
+            plan.print("Getting genesis file")
+            genesis_artifact = plan.store_service_files(
+                name="genesis",
+                service_name="contracts" + args["deployment_suffix"],
+                src=constants.OUTPUT_DIR + "/genesis.json",
+            )
+
+    if any(args["mitm_proxied_components"].values()):
+        plan.print("Deploying MITM")
+        import_module(mitm_package).run(plan, args)
+    else:
+        plan.print("Skipping the deployment of MITM")
+
+    if deployment_stages.get("deploy_agglayer", False):
+        plan.print("Deploying the wrapper agglayer")
+        import_module(agglayer_package).run(
+            plan, deployment_stages, args, contract_setup_addresses
+        )
+    else:
+        plan.print("Skipping the deployment of the agglayer")
+
+    l2_context = None
+    if deployment_stages.get("deploy_cdk_central_environment", False):
+        l2_context = chain_launcher.launch(
+            plan,
+            args,
+            contract_setup_addresses,
+            sovereign_contract_setup_addresses,
+            deployment_stages,
+            genesis_artifact,
+        )
+    else:
+        plan.print("Skipping the deployment of cdk central/trusted environment")
+
+    if deployment_stages.get("deploy_cdk_bridge_infra", False):
+        plan.print("Deploying cdk bridge infrastructure")
+        chain_launcher.deploy_bridge_infra(
+            plan,
+            args,
+            l1_context,
+            l2_context,
+            contract_setup_addresses,
+            deployment_stages,
+            sovereign_contract_setup_addresses,
+        )
+    else:
+        plan.print("Skipping the deployment of cdk bridge infrastructure")
+
+    if deployment_stages.get("deploy_l2_contracts", False):
+        plan.print("Deploying contracts on L2")
+        import_module(agglayer_contracts_package).deploy_l2_contracts(plan, args)
+
+    additional_services_launcher.launch(
+        plan,
+        args,
+        contract_setup_addresses,
+        sovereign_contract_setup_addresses,
+        genesis_artifact,
+        deployment_stages,
+        sequencer_type,
+        l1_context,
+        l2_context,
+    )
+
+
+def deploy_helper_service(plan, args):
+    get_rollup_info_template = read_file(
+        src="../../static_files/scripts/get-rollup-info.sh"
+    )
+    get_rollup_info_artifact = plan.render_templates(
+        name="get-rollup-info",
+        config={
+            "get-rollup-info.sh": struct(
+                template=get_rollup_info_template,
+                data=args
+                | {
+                    "rpc_url": args["l1_rpc_url"],
+                    "output_dir": constants.OUTPUT_DIR,
+                },
+            )
+        },
+    )
+
+    helper_service_name = "helper" + args["deployment_suffix"]
+    plan.add_service(
+        name=helper_service_name,
+        config=ServiceConfig(
+            image=constants.TOOLBOX_IMAGE,
+            files={constants.OUTPUT_DIR: get_rollup_info_artifact},
+            entrypoint=["bash", "-c"],
+            cmd=["sleep infinity"],
+        ),
+    )
+
+    plan.exec(
+        description="Retrieving rollup data from the rollup manager contract",
+        service_name=helper_service_name,
+        recipe=ExecRecipe(
+            command=[
+                "/bin/sh",
+                "-c",
+                "chmod +x {0} && {0}".format(
+                    "{}/get-rollup-info.sh".format(constants.OUTPUT_DIR),
+                ),
+            ]
+        ),
+    )
