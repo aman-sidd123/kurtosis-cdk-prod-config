@@ -16,9 +16,8 @@ ARG FOUNDRY_VERSION="v1.4.4" # 2025-10-30
 
 # STEP 1: Download agglayer contracts dependencies and compile contracts.
 WORKDIR /opt/agglayer-contracts
-RUN git clone --branch main https://github.com/agglayer/agglayer-contracts . \
-  && git checkout ${AGGLAYER_CONTRACTS_TAG_OR_COMMIT_SHA} \
-  && npm install --global npm@10.9.0 \
+COPY agglayer-contracts .
+RUN npm install --global npm@10.9.0 \
   && npm install \
   && npx hardhat compile
 
