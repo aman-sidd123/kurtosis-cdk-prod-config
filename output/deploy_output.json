@@ -1,0 +1,25 @@
+{
+  "polygonRollupManagerAddress": "0xb5c56f66Dc207D6681b1CEEB7f5093d7F647ab06",
+  "polygonZkEVMBridgeAddress": "0xd06a48Ab136aba8FDcCf59e947a76D35A865CB2A",
+  "polygonZkEVMGlobalExitRootAddress": "0x3b5Cf5bE95189396a7C5bf726E91F852F602d5aE",
+  "aggLayerGatewayAddress": "0x49e6935E624F65f4FC555Af035D1c27724fb0b1e",
+  "pessimisticVKeyRouteALGateway": {
+    "pessimisticVKeySelector": "0x00000009",
+    "verifier": "0x5060fFa348A982EFaF4dbc197BC178083B67Ef97",
+    "pessimisticVKey": "0x00139b6c32b3748fae95a38c289d46c30730c3f900e3fff3ad6db2aa95aaa142"
+  },
+  "polTokenAddress": "0x2C5c6Eb6639B56DCeB3B97634D6f3F3B72bDf24E",
+  "zkEVMDeployerContract": "0x1b50e2F3bf500Ab9Da6A7DBb6644D392D9D14b99",
+  "deployerAddress": "0xE34aaF64b29273B7D567FCFc40544c014EEe9970",
+  "timelockContractAddress": "0x0116BB3978E63938aeDF71Fae83Ec096455D686A",
+  "deploymentRollupManagerBlockNumber": 124,
+  "upgradeToULxLyBlockNumber": 124,
+  "admin": "0xE34aaF64b29273B7D567FCFc40544c014EEe9970",
+  "trustedAggregator": "0xCae5b68Ff783594bDe1b93cdE627c741722c4D4d",
+  "proxyAdminAddress": "0xc6a76BbFc4e39d26C121A81b82248565CFEB7f95",
+  "salt": "0x0000000000000000000000000000000000000000000000000000000000000006",
+  "AgglayerManager": "0xb5c56f66Dc207D6681b1CEEB7f5093d7F647ab06",
+  "AgglayerBridge": "0xd06a48Ab136aba8FDcCf59e947a76D35A865CB2A",
+  "AgglayerGER": "0x3b5Cf5bE95189396a7C5bf726E91F852F602d5aE",
+  "AgglayerGateway": "0x49e6935E624F65f4FC555Af035D1c27724fb0b1e"
+}

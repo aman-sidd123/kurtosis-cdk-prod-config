@@ -30,12 +30,7 @@ send-tx = "unlimited"
 
 [rate-limiting.network]
 
-[outbound.rpc.settle-tx]
-max-retries = 3
-retry-interval = "7s"
-confirmations = 1
-
-[outbound.rpc.settle-cert]
+[outbound.rpc.settle]
 max-retries = 3
 retry-interval = "7s"
 confirmations = 1

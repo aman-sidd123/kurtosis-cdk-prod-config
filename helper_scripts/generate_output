@@ -1,0 +1,1 @@
+kurtosis files storeservice --name cdk-output cdk contracts-001 /opt/output && kurtosis files download cdk cdk-output ./output

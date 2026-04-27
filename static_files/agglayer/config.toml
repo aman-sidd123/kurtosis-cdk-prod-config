@@ -39,12 +39,7 @@ max-response-body-size = 104857600
 max-decoding-message-size = 104857600
 max-encoding-message-size = 104857600
 
-[outbound.rpc.settle-tx]
-max-retries = 3
-retry-interval = "7s"
-confirmations = 1
-
-[outbound.rpc.settle-cert]
+[outbound.rpc.settle]
 max-retries = 3
 retry-interval = "7s"
 confirmations = 1

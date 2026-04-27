@@ -1,0 +1,20 @@
+{
+    "adminZkEVM": "0xE34aaF64b29273B7D567FCFc40544c014EEe9970",
+    "chainID": 123456789,
+    "consensusContract": "PolygonPessimisticConsensus",
+    "dataAvailabilityProtocol": "PolygonDataCommittee",
+    "deployerPvtKey": "0x12d7de8621a77640c9241b2595ba78ce443d05e94090365ab3bb5e19df82c625",
+    "description": "kurtosis-devnet - Amolygon",
+    "forkID": 12,
+    "gasTokenAddress":"",
+    "maxFeePerGas": "",
+    "maxPriorityFeePerGas": "",
+    "multiplierGas": "",
+    "networkName": "Amolygon",
+    "realVerifier": false,
+    "trustedSequencer": "0x5b06837A43bdC3dD9F114558DAf4B26ed49842Ed",
+    "trustedSequencerURL": "http://cdk-erigon-sequencer-001:8545",
+    "trustedAggregator":"0xCae5b68Ff783594bDe1b93cdE627c741722c4D4d",
+    "programVKey": "0x00139b6c32b3748fae95a38c289d46c30730c3f900e3fff3ad6db2aa95aaa142",
+    "proxiedTokensManager" : "0xc653eCD4AC5153a3700Fb13442Bcf00A691cca16"
+}

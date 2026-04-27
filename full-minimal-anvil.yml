@@ -7,32 +7,34 @@ deployment_stages:
   deploy_agglayer: true
 
 args:
-  sequencer_type: erigon
+  sequencer_type: cdk-erigon
   consensus_contract_type: pessimistic
   additional_services: []
-  erigon_strict_mode: false
-  agglayer_prover_sp1_key: REDACTED
-  enable_normalcy: true
 
   l1_engine: anvil
   l1_chain_id: 31337
   l1_rpc_url: "http://host.docker.internal:8545"
   l1_ws_url: "ws://host.docker.internal:8545"
   l1_funding_amount: "100ether"
+  agglayer_image: "europe-west2-docker.pkg.dev/prj-polygonlabs-devtools-dev/public/agglayer:0.4.4-remove-agglayer-prover"
+
   agglayer_contracts_image: europe-west2-docker.pkg.dev/prj-polygonlabs-devtools-dev/public/agglayer-contracts:v11.0.0
-  agglayer_image: ghcr.io/agglayer/agglayer-rs:main
   # Fix 1: Use "latest" instead of "finalized" for Anvil
   zkevm_l1_highest_block_type: "latest"
 
-  # Fix 2: Correct syntax (removed rogue quotes), wrapped values in quotes
+  zkevm_prover_image: hermeznetwork/zkevm-prover:v8.0.0-RC16-fork.12
+  cdk_erigon_image: ghcr.io/0xpolygon/cdk-erigon:v2.65.0-RC3
 
   chain_name: "Amolygon"
   l2_chain_id: 123456789
   l2_network_id: 1
 
   # Fix 3: Explicitly set fork ID to match your prover image
-  zkevm_fork_id: 12
-
+  agglayer_prover_primary_prover: mock-prover
+  erigon_strict_mode: false
+  gas_token_enabled: false
+  enable_normalcy: true
+  aggkit_components: aggsender,bridge
   zkevm_use_real_verifier: false
   log_level: info
   log_format: json
