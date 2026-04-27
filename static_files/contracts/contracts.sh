@@ -46,7 +46,7 @@ _wait_for_rpc_to_be_available() {
 
     echo "THE PRE ALLOCATED MNEMONIC IS: ${mnemonic}"
 
-    local max_retries=40
+    local max_retries=100
     local counter=0
     echo "RPC_URL IS: ${rpc_url}"
     until cast send --rpc-url "$rpc_url" --mnemonic "$mnemonic" --value 0 "$(cast az)" &> /dev/null; do
@@ -1035,7 +1035,7 @@ l2_legacy_fund_accounts() {
         local rpc_url="$1"
         local private_key="$2"
 
-        local max_retries=40
+        local max_retries=100
         local counter=0
         until cast send --rpc-url "$rpc_url" --private-key "$private_key" --value 0 --legacy "$(cast az)" &> /dev/null; do
             ((counter++))

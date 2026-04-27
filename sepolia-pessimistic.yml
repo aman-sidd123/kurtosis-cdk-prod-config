@@ -1,0 +1,57 @@
+deployment_stages:
+  deploy_l1: false
+  deploy_agglayer_contracts_on_l1: true
+  deploy_databases: true
+  deploy_cdk_central_environment: true
+  deploy_cdk_bridge_infra: true
+  deploy_agglayer: true
+
+args:
+  l1_preallocated_mnemonic: "rib awesome dolphin lava doctor novel region lava utility motion matter rebel"
+  l1_preallocated_private_key: "0x76354ca262ad493f613f0be5bb586450fc73a7ae498a64b8cca7444721a4f8ce"
+
+  l2_keystore_password: "X2KniWTRMhoxagMEbtgc1guiCiBfH"
+
+  l2_sequencer_address: "0xcF04510577E923126DF89cFa4922b66818F37798"
+  l2_sequencer_private_key: "0x76354ca262ad493f613f0be5bb586450fc73a7ae498a64b8cca7444721a4f8ce"
+
+  l2_aggregator_address: "0x52ab1ba1CA0D26CB1C4D5d419BD942369c89EE32"
+  l2_aggregator_private_key: "0x07973d6d21d1fe2373ff49b656027baa591574de66e9ad191bbd37e9db12dc3a"
+
+  l2_admin_address: "0x5cc3402c32DA8379c81197f8ED9919CAe9b04EBc"
+  l2_admin_private_key: "0x2f7f2a7d2d97a1915b9cd648adeebd2ab1283b7820221a22625ee495e06103e4"
+
+  l2_dac_address: "0xB30F82E6E74Db673cF071cf3277108dF61FECE28"
+  l2_dac_private_key: "0xe9ac4e02d4bd4a8b0743d15f90c5ef4a28ccc301de23792055c224df41848e8d"
+
+  l2_sovereignadmin_address: "0xF0161502d7575620a312ceb63D18cfF43f5638b1"
+  l2_sovereignadmin_private_key: "0xe3f0fec0929c3a1b2437b7f5a03e8ab252f1d646358761480533163f92ddf0e0"
+
+  l2_claimsponsor_address: "0xe41bDf060ad72E83d1A40fB80a4afbF38249eDDe"
+  l2_claimsponsor_private_key: "0x015fb5d35f5cd0377c81ee2f79a4b859dfea97d781bbd992b7a79b371dc5369f"
+
+  sequencer_type: cdk-erigon
+  consensus_contract_type: pessimistic
+  agglayer_contracts_image: europe-west2-docker.pkg.dev/prj-polygonlabs-devtools-dev/public/agglayer-contracts:v11.0.0
+  cdk_erigon_image: ghcr.io/0xpolygon/cdk-erigon:v2.65.0-RC3
+
+  additional_services: []
+  l1_chain_id: 11155111
+  l1_rpc_url: "https://sepolia.infura.io/v3/26d53cd246374227b43fc87ee0bed59e"
+  l1_ws_url: "ws://172.17.0.1:8547"
+  # l1_ws_url: "ws://host.docker.internal:8547"
+  l1_funding_amount: "1ether"
+  zkevm_prover_image: hermeznetwork/zkevm-prover:v8.0.0-RC16-fork.12
+
+  chain_name: "Amolygon"
+  l2_chain_id: 123456789
+  l2_network_id: 1
+  agglayer_prover_primary_prover: mock-prover
+  erigon_strict_mode: false
+  gas_token_enabled: false
+  enable_normalcy: true
+  aggkit_components: aggsender,bridge
+  zkevm_use_real_verifier: false
+
+  log_level: info
+  log_format: json
