@@ -99,7 +99,8 @@ Examples:
 Notes:
   - Defaults enclave name to 'cdk'
   - Starts the enclave's existing long-running Docker containers directly
-  - Skips one-shot Kurtosis helper/job containers
+  - Starts core CDK services first, then resumes additional user-service containers
+  - Skips Kurtosis helper/job containers that are not tagged as user services
   - Repairs the Kurtosis logs collector if it crashes on stale Fluent Bit backlog files
 EOF
 }
@@ -177,7 +178,7 @@ start_user_services() {
   local enclave_uuid="$1"
   local service_ids
   local ordered_containers=()
-  local skipped_containers=()
+  local additional_containers=()
   local container_name
   local service_name
   local delay_seconds
@@ -223,15 +224,15 @@ start_user_services() {
     )"
 
     if [[ -n "$container_name" ]]; then
-      skipped_containers+=("$container_name")
+      additional_containers+=("$container_name")
     fi
   done <<< "$service_ids"
 
   [[ ${#ordered_containers[@]} -gt 0 ]] || die "No restartable long-running services found for enclave UUID ${enclave_uuid}"
 
-  if [[ ${#skipped_containers[@]} -gt 0 ]]; then
-    log "Skipping one-shot or unmanaged services:"
-    for container_name in "${skipped_containers[@]}"; do
+  if [[ ${#additional_containers[@]} -gt 0 ]]; then
+    log "Additional user-service containers queued after core services:"
+    for container_name in "${additional_containers[@]}"; do
       log "  - $container_name"
     done
   fi
@@ -243,6 +244,19 @@ start_user_services() {
     )"
 
     log "Starting service container: $container_name"
+    docker start "$container_name" >/dev/null || log "WARN: failed to start $container_name"
+
+    delay_seconds="$(service_delay "$service_name")"
+    sleep "$delay_seconds"
+  done
+
+  for container_name in "${additional_containers[@]}"; do
+    service_name="$(
+      docker inspect "$container_name" \
+        --format '{{ index .Config.Labels "com.kurtosistech.id" }}'
+    )"
+
+    log "Starting additional service container: $container_name"
     docker start "$container_name" >/dev/null || log "WARN: failed to start $container_name"
 
     delay_seconds="$(service_delay "$service_name")"
